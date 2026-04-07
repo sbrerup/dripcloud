@@ -7,14 +7,18 @@ metadata:
     - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
-  source:
-    repoURL: 'https://pkgs.tailscale.com/helmcharts'
-    targetRevision: 1.96.5
-    chart: tailscale-operator
-    helm:
-      values: |
-        apiServerProxyConfig:
-          mode: "true"
+  sources:
+    - repoURL: 'https://pkgs.tailscale.com/helmcharts'
+      targetRevision: 1.96.5
+      chart: tailscale-operator
+      helm:
+        values: |
+          apiServerProxyConfig:
+            mode: "true"
+            
+    - repoURL: 'https://github.com/sbrerup/dripcloud.git'
+      targetRevision: HEAD
+      path: manifests/tailscale
         
   destination:
     server: 'https://kubernetes.default.svc'
