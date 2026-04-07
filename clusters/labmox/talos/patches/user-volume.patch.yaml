@@ -1,0 +1,8 @@
+apiVersion: v1alpha1
+kind: UserVolumeConfig
+name: local-volume
+provisioning:
+  diskSelector:
+    match: disk.transport == 'virtio'
+  minSize: 1000GB
+  maxSize: 2000GB

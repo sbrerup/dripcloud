@@ -1,0 +1,8 @@
+# Ignore generated Talos configurations and secrets
+secrets.yaml
+controlplane.yaml
+worker.yaml
+talosconfig
+
+# Ignore downloaded kubeconfigs
+kubeconfig
