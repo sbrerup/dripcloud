@@ -1,0 +1,24 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: labmox-infrastructure
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: 'https://github.com/sbrerup/dripcloud.git'
+    targetRevision: HEAD
+    path: infrastructure
+    directory:
+      recurse: true # This allows you to put apps in subfolders like infrastructure/storage and infrastructure/tailscale
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: argocd 
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
