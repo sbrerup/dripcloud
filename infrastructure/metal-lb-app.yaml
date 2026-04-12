@@ -7,14 +7,14 @@ metadata:
     - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
-  source:
-    repoURL: 'https://metallb.github.io/metallb'
-    targetRevision: 0.15.3
-    chart: metallb
-    helm:
-      values: |
-        # We don't strictly need any overrides for a basic setup, 
-        # but leaving this block here makes it easy to add them later.
+  sources:
+    - repoURL: 'https://metallb.github.io/metallb'
+      targetRevision: 0.15.3
+      chart: metallb
+    - repoURL: 'https://github.com/sbrerup/dripcloud.git'
+      targetRevision: HEAD
+      path: manifests/metal-lb
+    
   destination:
     server: 'https://kubernetes.default.svc'
     namespace: metallb-system
