@@ -1,0 +1,27 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: metallb
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: 'https://metallb.github.io/metallb'
+    targetRevision: 0.15.3
+    chart: metallb
+    helm:
+      values: |
+        # We don't strictly need any overrides for a basic setup, 
+        # but leaving this block here makes it easy to add them later.
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: metallb-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true 
