@@ -1,0 +1,22 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dripcloud
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  destination:
+    namespace: dripcloud
+    server: https://kubernetes.default.svc
+  sources:
+    - repoURL: 'https://github.com/sbrerup/dripcloud.git'
+      targetRevision: HEAD
+      path: manifests/dripcloud
+  project: default
+  syncPolicy:
+    automated: 
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
