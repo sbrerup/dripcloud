@@ -9,13 +9,10 @@ spec:
   destination:
     namespace: envoy-gateway-system
     server: https://kubernetes.default.svc
-  sources:
-    - repoURL: registry-1.docker.io/envoyproxy
-      chart: gateway-helm
-      targetRevision: v1.7.1
-    - repoURL: 'https://github.com/sbrerup/dripcloud.git'
-      targetRevision: HEAD
-      path: manifests/envoy-gateway
+  source:
+    chart: gateway-helm
+    repoURL: registry-1.docker.io/envoyproxy
+    targetRevision: v1.7.1
   project: default
   syncPolicy:
     automated: 
