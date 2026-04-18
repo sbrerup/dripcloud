@@ -1,0 +1,92 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cnpg-system
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - repoURL: 'https://cloudnative-pg.github.io/charts'
+      targetRevision: 0.28.0
+      chart: cloudnative-pg
+      helm:
+        values: |
+          minecraftServer:
+            type: "PAPER"
+            version: "1.21.11"
+            whitelist:
+            ops:
+            forcegameMode: true
+            levelSeed:
+            gameMode: survival
+            motd: "Welcome to Dripcloud Multiverse"
+            pvp: false
+  
+            serviceType: ClusterIP
+  
+            viewDistance: 10
+            memory: 8g
+  
+            modUrls: []
+            pluginUrls:
+              - "https://download.geysermc.org/v2/projects/geyser/versions/latest/builds/latest/downloads/spigot"
+              - "https://download.geysermc.org/v2/projects/floodgate/versions/latest/builds/latest/downloads/spigot"
+              - "https://hangarcdn.papermc.io/plugins/ViaVersion/ViaVersion/versions/5.8.1/PAPER/ViaVersion-5.8.1.jar"
+              - "https://hangarcdn.papermc.io/plugins/ViaVersion/ViaBackwards/versions/5.8.1/PAPER/ViaBackwards-5.8.1.jar"
+              - "https://hangarcdn.papermc.io/plugins/Blue/BlueMap/versions/5.20/PAPER/bluemap-5.20-paper.jar"
+              - "https://hangarcdn.papermc.io/plugins/Multiverse/Multiverse-Core/versions/5.6.1/PAPER/multiverse-core-5.6.1.jar"
+              - "https://hangarcdn.papermc.io/plugins/Multiverse/Multiverse-Inventories/versions/5.3.2/PAPER/multiverse-inventories-5.3.2.jar"
+              - "https://hangarcdn.papermc.io/plugins/Multiverse/Multiverse-Portals/versions/5.2.1/PAPER/multiverse-portals-5.2.1.jar"
+  
+            rcon:
+              enabled: true
+              serviceType: ClusterIP
+              password: ""
+  
+            extraPorts:
+              - name: geyser
+                containerPort: 19132
+                protocol: UDP
+                service:
+                  enabled: true
+                  type: ClusterIP
+                  port: 19132
+              - name: bluemap
+                containerPort: 8100
+                protocol: TCP
+                service:
+                  enabled: true
+                  type: ClusterIP
+                  port: 8100
+  
+          extraEnv:
+            ENABLE_ROLLING_LOGS: "true"
+            OVERRIDE_SERVER_PROPERTIES: "true"
+            FORCE_WORLD_COPY: "false"
+  
+          persistence:
+            annotations: {}
+            dataDir:
+              enabled: true
+              size: 100Gi
+  
+          resources:
+            requests:
+              memory: 8Gi
+              cpu: 1
+            limits:
+              memory: 12Gi
+              cpu: 6
+
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: cnpg-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true 
