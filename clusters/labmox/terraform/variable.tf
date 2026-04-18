@@ -6,10 +6,6 @@ variable "proxmox_username" {
   type = string
 }
 
-variable "proxmox_node_name" {
-  type = string  
-}
-
 variable "proxmox_address" {
   type = string
 }
