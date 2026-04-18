@@ -17,6 +17,7 @@ spec:
       helm:
         values: |
           minecraftServer:
+            eula: "true"
             type: "PAPER"
             version: "1.21.11"
             whitelist:
