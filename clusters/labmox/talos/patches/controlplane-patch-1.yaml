@@ -1,11 +1,13 @@
 machine:
   network:
+    nameservers:
+      - 10.1.2.1 
     interfaces:
       - interface: eth0
         addresses:
           - 10.1.2.90/24
         routes:
-          - network: 10.1.2.0/24
+          - network: 0.0.0.0/0
             gateway: 10.1.2.1
   install:
     disk: /dev/sda

@@ -1,0 +1,6 @@
+.env
+*.tfvars
+.terraform*
+*.tfstate*
+charts
+secrets.yaml
