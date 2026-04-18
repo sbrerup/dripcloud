@@ -86,7 +86,7 @@ spec:
 
   destination:
     server: 'https://kubernetes.default.svc'
-    namespace: cnpg-system
+    namespace: dripcraft
   syncPolicy:
     automated:
       prune: true
