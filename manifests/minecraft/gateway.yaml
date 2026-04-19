@@ -9,5 +9,7 @@ spec:
     protocol: TCP
     port: 25565
     allowedRoutes:
+      namespaces:
+        from: All
       kinds:
       - kind: TCPRoute
