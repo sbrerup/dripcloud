@@ -81,7 +81,7 @@ spec:
             OVERRIDE_SERVER_PROPERTIES: "true"
             FORCE_WORLD_COPY: "false"
             APPLY_EXTRA_FILES: |
-              plugins/BentoBox/addons/AOneBlock.jar<https://github.com/BentoBoxWorld/AOneBlock/releases/download/1.23.0/AOneBlock-1.23.0.jar
+              plugins/BentoBox/addons<https://cdn.modrinth.com/data/qq7CK8U4/versions/F2MRbPyb/AOneBlock-1.23.0.jar
   
           persistence:
             annotations: {}
