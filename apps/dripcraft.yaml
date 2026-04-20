@@ -31,6 +31,7 @@ spec:
             serviceType: LoadBalancer
             serviceAnnotations:
               io.cilium/lb-ipam-ips: "10.1.2.250"
+              io.cilium/lb-ipam-sharing-key: "dripcraft-shared"
   
             viewDistance: 10
             memory: 8g
@@ -61,6 +62,7 @@ spec:
                   port: 19132
                   annotations:
                     io.cilium/lb-ipam-ips: "10.1.2.250"
+                    io.cilium/lb-ipam-sharing-key: "dripcraft-shared"
               - name: bluemap
                 containerPort: 8100
                 protocol: TCP
