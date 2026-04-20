@@ -37,12 +37,11 @@ spec:
             pluginUrls:
               - "https://download.geysermc.org/v2/projects/geyser/versions/latest/builds/latest/downloads/spigot"
               - "https://download.geysermc.org/v2/projects/floodgate/versions/latest/builds/latest/downloads/spigot"
-              - "https://hangarcdn.papermc.io/plugins/ViaVersion/ViaVersion/versions/5.8.1/PAPER/ViaVersion-5.8.1.jar"
-              - "https://hangarcdn.papermc.io/plugins/ViaVersion/ViaBackwards/versions/5.8.1/PAPER/ViaBackwards-5.8.1.jar"
-              - "https://hangarcdn.papermc.io/plugins/Blue/BlueMap/versions/5.20/PAPER/bluemap-5.20-paper.jar"
-              - "https://hangarcdn.papermc.io/plugins/Multiverse/Multiverse-Core/versions/5.6.1/PAPER/multiverse-core-5.6.1.jar"
-              - "https://hangarcdn.papermc.io/plugins/Multiverse/Multiverse-Inventories/versions/5.3.2/PAPER/multiverse-inventories-5.3.2.jar"
-              - "https://hangarcdn.papermc.io/plugins/Multiverse/Multiverse-Portals/versions/5.2.1/PAPER/multiverse-portals-5.2.1.jar"
+              - "https://github.com/EssentialsX/Essentials/releases/download/2.21.2/EssentialsX-2.21.2.jar"
+              - "https://cdn.modrinth.com/data/3wmN97b8/versions/9qZJ8PBg/multiverse-core-5.6.1.jar"
+              - "https://cdn.modrinth.com/data/qvdtDX3s/versions/lvgetpFU/multiverse-inventories-5.3.2.jar"
+              - "https://cdn.modrinth.com/data/1u6JkXh5/versions/p8T2aZ8U/worldedit-bukkit-7.4.2.jar"
+              - "https://github.com/BentoBoxWorld/BentoBox/releases/download/3.14.2/BentoBox-3.14.2.jar"
   
             rcon:
               enabled: true
