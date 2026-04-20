@@ -3,7 +3,7 @@ kind: Gateway
 metadata:
   name: dripcraft-gateway
 spec:
-  gatewayClassName: eg
+  gatewayClassName: celium
   listeners:
   - name: dripcraft-default
     protocol: TCP
