@@ -4,6 +4,9 @@ metadata:
   name: dripcraft-gateway
 spec:
   gatewayClassName: cilium
+  addresses:
+  - type: IPAddress
+    value: 10.1.2.250
   listeners:
   - name: dripcraft-default
     protocol: TCP
