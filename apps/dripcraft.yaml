@@ -46,8 +46,9 @@ spec:
   
             rcon:
               enabled: true
-              serviceType: ClusterIP
-              password: ""
+              serviceType: LoadBalancer
+              existingSecret: "dripcraft-rcon-secret"
+              secretKey: "rcon-password"
   
             extraPorts:
               - name: geyser
@@ -69,6 +70,10 @@ spec:
                   port: 8100
 
           serviceAnnotations:
+            io.cilium/lb-ipam-ips: "10.1.2.250"
+            io.cilium/lb-ipam-sharing-key: "dripcraft-shared"
+
+          rconServiceAnnotations:
             io.cilium/lb-ipam-ips: "10.1.2.250"
             io.cilium/lb-ipam-sharing-key: "dripcraft-shared"
 
