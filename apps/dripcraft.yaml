@@ -8,9 +8,9 @@ metadata:
 spec:
   project: default
   sources:
-    # - repoURL: 'https://github.com/sbrerup/dripcloud.git'
-    #   targetRevision: HEAD
-    #   path: manifests/minecraft
+    - repoURL: 'https://github.com/sbrerup/dripcloud.git'
+      targetRevision: HEAD
+      path: manifests/minecraft
     - repoURL: 'https://itzg.github.io/minecraft-server-charts'
       targetRevision: 5.1.2
       chart: minecraft
