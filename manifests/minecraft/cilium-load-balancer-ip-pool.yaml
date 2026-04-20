@@ -1,0 +1,7 @@
+apiVersion: "cilium.io/v2alpha1"
+kind: CiliumLoadBalancerIPPool
+metadata:
+  name: "dripcraft-pool"
+spec:
+  blocks:
+  - cidr: "10.1.2.250/32"
