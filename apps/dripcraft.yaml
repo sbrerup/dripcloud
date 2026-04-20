@@ -28,7 +28,9 @@ spec:
             motd: "Welcome to DripCraft Multiverse"
             pvp: false
   
-            serviceType: ClusterIP
+            serviceType: LoadBalancer
+            serviceAnnotations:
+              io.cilium/lb-ipam-ips: "10.1.2.250"
   
             viewDistance: 10
             memory: 8g
@@ -55,8 +57,10 @@ spec:
                 protocol: UDP
                 service:
                   enabled: true
-                  type: ClusterIP
+                  type: LoadBalancer
                   port: 19132
+                  annotations:
+                    io.cilium/lb-ipam-ips: "10.1.2.250"
               - name: bluemap
                 containerPort: 8100
                 protocol: TCP
