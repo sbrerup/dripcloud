@@ -28,10 +28,7 @@ spec:
             motd: "Welcome to DripCraft Multiverse"
             pvp: false
   
-            serviceType: LoadBalancer
-            serviceAnnotations:
-              io.cilium/lb-ipam-ips: "10.1.2.250"
-              io.cilium/lb-ipam-sharing-key: "dripcraft-shared"
+            serviceType: LoadBalancer            
   
             viewDistance: 10
             memory: 8g
@@ -70,7 +67,11 @@ spec:
                   enabled: true
                   type: ClusterIP
                   port: 8100
-  
+
+          serviceAnnotations:
+            io.cilium/lb-ipam-ips: "10.1.2.250"
+            io.cilium/lb-ipam-sharing-key: "dripcraft-shared"
+
           extraEnv:
             ENABLE_ROLLING_LOGS: "true"
             OVERRIDE_SERVER_PROPERTIES: "true"
