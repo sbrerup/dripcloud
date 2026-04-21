@@ -32,10 +32,7 @@ spec:
   
             viewDistance: 12
             memory: "6500M"
-            env:
-              # This single line tells the container to inject the entire Aikar's Flags string automatically
-              USE_AIKAR_FLAGS: "true"
-  
+    
             modUrls: []
             pluginUrls:
               - "https://download.geysermc.org/v2/projects/geyser/versions/latest/builds/latest/downloads/spigot"
@@ -80,6 +77,7 @@ spec:
             io.cilium/lb-ipam-sharing-key: "dripcraft-shared"
 
           extraEnv:
+            USE_AIKAR_FLAGS: "true"
             ENABLE_ROLLING_LOGS: "true"
             OVERRIDE_SERVER_PROPERTIES: "true"
             FORCE_WORLD_COPY: "false"
