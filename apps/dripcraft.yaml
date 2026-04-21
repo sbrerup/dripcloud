@@ -30,8 +30,11 @@ spec:
   
             serviceType: LoadBalancer            
   
-            viewDistance: 10
-            memory: 8g
+            viewDistance: 12
+            memory: "6500M"
+            env:
+              # This single line tells the container to inject the entire Aikar's Flags string automatically
+              USE_AIKAR_FLAGS: "true"
   
             modUrls: []
             pluginUrls:
@@ -92,10 +95,10 @@ spec:
   
           resources:
             requests:
-              memory: 8Gi
+              memory: 4Gi
               cpu: 1
             limits:
-              memory: 12Gi
+              memory: 8Gi
               cpu: 6
 
   destination:
