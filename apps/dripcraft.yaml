@@ -77,6 +77,7 @@ spec:
             io.cilium/lb-ipam-sharing-key: "dripcraft-shared"
 
           extraEnv:
+            ENABLE_COMMAND_BLOCK: "true"
             USE_AIKAR_FLAGS: "true"
             ENABLE_ROLLING_LOGS: "true"
             OVERRIDE_SERVER_PROPERTIES: "true"
