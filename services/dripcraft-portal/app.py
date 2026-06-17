@@ -577,6 +577,21 @@ def used_ports(servers: list[dict[str, Any]], services: list[dict[str, Any]]) ->
     return ports
 
 
+def find_created_server(
+    before_servers: list[dict[str, Any]],
+    after_servers: list[dict[str, Any]],
+    name: str,
+    port: int,
+) -> dict[str, Any] | None:
+    before_ids = {server.get("id") for server in before_servers if server.get("id")}
+    for server in after_servers:
+        if server.get("id") in before_ids:
+            continue
+        if server.get("name") == name and server.get("port") == port:
+            return server
+    return None
+
+
 def next_free_port(start: int, end: int, taken: set[int]) -> int:
     for port in range(start, end + 1):
         if port not in taken:
@@ -662,6 +677,7 @@ class App:
     def create_server(self, payload: dict[str, Any]) -> dict[str, Any]:
         if not self.config.crafty_configured:
             raise PortalError("Crafty credentials are not configured.", status=503)
+        server_name = clean_server_name(str(payload.get("name", "")))
         hostname = sanitize_hostname(str(payload.get("hostname") or payload.get("name") or ""))
         servers = self.crafty.list_servers()
         services = self.kube.list_managed_services()
@@ -676,17 +692,29 @@ class App:
                 self.config.port_range_end,
                 used_ports(servers, services),
             )
-        server_id = self.crafty.create_java_server(payload, port)
+        try:
+            server_id = self.crafty.create_java_server(payload, port)
+        except UpstreamError:
+            time.sleep(2)
+            created_server = find_created_server(
+                servers,
+                self.crafty.list_servers(),
+                server_name,
+                port,
+            )
+            if not created_server or not created_server.get("id"):
+                raise
+            server_id = str(created_server["id"])
         service = self.kube.create_or_update_service(
             server_id=server_id,
-            server_name=clean_server_name(str(payload.get("name", ""))),
+            server_name=server_name,
             hostname=hostname,
             target_port=port,
             external_port=self.config.service_external_port,
         )
         return {
             "serverId": server_id,
-            "name": clean_server_name(str(payload.get("name", ""))),
+            "name": server_name,
             "port": port,
             "exposure": service_summary(service, self.config.tailnet_domain),
             "craftyPanelUrl": self.config.crafty_panel_url,
@@ -840,6 +868,18 @@ class PortalHandler(BaseHTTPRequestHandler):
                 return
             self.serve_static(path)
         except PortalError as exc:
+            print(
+                json.dumps(
+                    {
+                        "level": "error",
+                        "path": self.path,
+                        "error": exc.code,
+                        "message": str(exc),
+                        "details": exc.details,
+                    },
+                    separators=(",", ":"),
+                )
+            )
             json_response(
                 self,
                 exc.status,

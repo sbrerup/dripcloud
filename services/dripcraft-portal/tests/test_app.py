@@ -2,6 +2,7 @@ import unittest
 
 from app import (
     build_service_manifest,
+    find_created_server,
     next_free_port,
     sanitize_hostname,
     sanitize_service_name,
@@ -38,6 +39,17 @@ class PortalHelpersTest(unittest.TestCase):
             [{"spec": {"ports": [{"targetPort": 25566}]}}],
         )
         self.assertEqual(ports, {25565, 25566})
+
+    def test_find_created_server_matches_new_name_and_port(self):
+        before = [{"id": "old", "name": "Old", "port": 25565}]
+        after = [
+            {"id": "old", "name": "Old", "port": 25565},
+            {"id": "new", "name": "DripBlock", "port": 25566},
+        ]
+        self.assertEqual(
+            find_created_server(before, after, "DripBlock", 25566),
+            {"id": "new", "name": "DripBlock", "port": 25566},
+        )
 
     def test_service_manifest_targets_crafty(self):
         manifest = build_service_manifest(
