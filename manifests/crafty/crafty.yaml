@@ -95,7 +95,7 @@ spec:
               mountPath: /data
       containers:
         - name: crafty
-          image: arcadiatechnology/crafty-4:4.10.6
+          image: arcadiatechnology/crafty-4:4.10.7
           imagePullPolicy: IfNotPresent
           env:
             - name: TZ
