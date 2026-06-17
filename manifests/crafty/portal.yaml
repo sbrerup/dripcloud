@@ -16,6 +16,7 @@ data:
   DEFAULT_MC_VERSION: ""
   DEFAULT_MEM_MIN: "1"
   DEFAULT_MEM_MAX: "4"
+  START_AFTER_CREATE_DELAY_SECONDS: "30"
   TAILSCALE_DOMAIN: ""
 ---
 apiVersion: v1
@@ -73,14 +74,14 @@ spec:
   template:
     metadata:
       annotations:
-        dripcloud.io/portal-revision: "2026-06-17-paper-autostart"
+        dripcloud.io/portal-revision: "2026-06-17-start-now-dark"
       labels:
         app.kubernetes.io/name: dripcraft-portal
     spec:
       serviceAccountName: dripcraft-portal
       containers:
         - name: portal
-          image: ghcr.io/sbrerup/dripcraft-portal:d12d85892bfe1b6497b6f13ad6e1b6809a9dd289
+          image: ghcr.io/sbrerup/dripcraft-portal:8b12f0fc10ea5a3ab498871dc0a4175416b9c4e8
           imagePullPolicy: Always
           envFrom:
             - configMapRef:
