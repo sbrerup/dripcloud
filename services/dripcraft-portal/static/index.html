@@ -63,8 +63,9 @@
             </label>
             <label>
               <span>Version</span>
-              <input name="version" type="text" required placeholder="1.21.8" list="versionOptions">
-              <datalist id="versionOptions"></datalist>
+              <select name="version" required>
+                <option value="">Loading versions</option>
+              </select>
             </label>
             <label>
               <span>JAR Type</span>
@@ -84,6 +85,7 @@
             </label>
           </div>
           <div class="checks">
+            <label><input name="startNow" type="checkbox" checked> Start after create</label>
             <label><input name="autostart" type="checkbox" checked> Start on boot</label>
             <label><input name="agreeToEula" type="checkbox" required> EULA accepted</label>
             <label><input name="redirect" type="checkbox" checked> Open Crafty</label>

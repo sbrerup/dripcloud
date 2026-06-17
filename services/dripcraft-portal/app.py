@@ -168,6 +168,7 @@ class Config:
     default_mem_max: int
     portal_token: str | None
     auto_redirect: bool
+    start_after_create_delay_seconds: int
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -192,6 +193,7 @@ class Config:
             default_mem_max=int_env("DEFAULT_MEM_MAX", 4),
             portal_token=os.getenv("PORTAL_TOKEN") or None,
             auto_redirect=bool_env("AUTO_REDIRECT_TO_CRAFTY", True),
+            start_after_create_delay_seconds=int_env("START_AFTER_CREATE_DELAY_SECONDS", 30),
         )
 
     @property
@@ -379,6 +381,9 @@ class CraftyClient:
 
     def patch_server_config(self, server_id: str, payload: dict[str, Any]) -> None:
         self.request("PATCH", f"/api/v2/servers/{urllib.parse.quote(server_id)}", payload)
+
+    def start_server(self, server_id: str) -> None:
+        self.request("POST", f"/api/v2/servers/{urllib.parse.quote(server_id)}/action/start_server")
 
     def delete_server(self, server_id: str, remove_files: bool) -> None:
         files = "true" if remove_files else "false"
@@ -799,6 +804,16 @@ class App:
             target_port=port,
             external_port=self.config.service_external_port,
         )
+        started = False
+        if bool(payload.get("startNow", True)):
+            delay = max(0, self.config.start_after_create_delay_seconds)
+            if delay:
+                time.sleep(delay)
+            try:
+                self.crafty.start_server(server_id)
+                started = True
+            except UpstreamError as exc:
+                warnings.append(f"Created server and exposure, but could not start server: {exc}")
         return {
             "serverId": server_id,
             "name": server_name,
@@ -806,6 +821,7 @@ class App:
             "exposure": service_summary(service, self.config.tailnet_domain),
             "craftyPanelUrl": self.config.crafty_panel_url,
             "autoRedirect": self.config.auto_redirect,
+            "started": started,
             "warnings": warnings,
         }
 
@@ -1023,6 +1039,7 @@ class PortalHandler(BaseHTTPRequestHandler):
                         "defaultMemMax": config.default_mem_max,
                         "authRequired": bool(config.portal_token),
                         "autoRedirect": config.auto_redirect,
+                        "startAfterCreateDelaySeconds": config.start_after_create_delay_seconds,
                     },
                 },
             )

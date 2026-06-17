@@ -80,6 +80,7 @@ function formPayload(form) {
     category: state.jars?.category || state.config?.defaultCategory || "mc_java_servers",
     memMin: Number(data.get("memMin") || 1),
     memMax: Number(data.get("memMax") || 4),
+    startNow: data.get("startNow") === "on",
     autostart: data.get("autostart") === "on",
     agreeToEula: data.get("agreeToEula") === "on",
     redirect: data.get("redirect") === "on",
@@ -139,10 +140,7 @@ async function loadConfig() {
   els.craftyLink.href = config.craftyPanelUrl || "#";
   els.portPool.textContent = `${config.portRangeStart}-${config.portRangeEnd}`;
   els.authPanel.classList.toggle("hidden", !config.authRequired || Boolean(state.token));
-  const versionInput = els.createForm.elements.version;
-  if (config.defaultMinecraftVersion && !versionInput.value) {
-    versionInput.value = config.defaultMinecraftVersion;
-  }
+  els.createForm.elements.version.dataset.defaultVersion = config.defaultMinecraftVersion || "";
   els.createForm.elements.memMin.value = config.defaultMemMin || 1;
   els.createForm.elements.memMax.value = config.defaultMemMax || 4;
   els.createForm.elements.jarType.value = config.defaultJarType || "paper";
@@ -150,18 +148,33 @@ async function loadConfig() {
 
 function updateVersionOptions() {
   const jarType = els.createForm.elements.jarType.value;
-  const datalist = document.getElementById("versionOptions");
-  datalist.innerHTML = "";
+  const versionSelect = els.createForm.elements.version;
+  const preferred =
+    versionSelect.value ||
+    versionSelect.dataset.defaultVersion ||
+    state.config?.defaultMinecraftVersion ||
+    "";
   const selected = (state.jars?.types || []).find((type) => type.id === jarType);
-  for (const version of selected?.versions || []) {
+  const versions = selected?.versions || [];
+  versionSelect.innerHTML = "";
+  if (!versions.length) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "No versions available";
+    versionSelect.appendChild(option);
+    versionSelect.disabled = true;
+    return;
+  }
+  versionSelect.disabled = false;
+  for (const version of versions) {
     const option = document.createElement("option");
     option.value = version;
-    datalist.appendChild(option);
+    option.textContent = version;
+    versionSelect.appendChild(option);
   }
-  const versionInput = els.createForm.elements.version;
-  if (!versionInput.value && selected?.versions?.length) {
-    versionInput.value = selected.versions[0];
-  }
+  const configuredDefault = state.config?.defaultMinecraftVersion || "";
+  const fallback = versions.includes(configuredDefault) ? configuredDefault : versions[0];
+  versionSelect.value = versions.includes(preferred) ? preferred : fallback;
 }
 
 async function loadJars() {
@@ -203,8 +216,10 @@ async function createServer(event) {
       method: "POST",
       body: JSON.stringify(payload),
     });
-    const warningText = result.warnings?.length ? ` ${result.warnings.join(" ")}` : "";
-    showToast(`${result.name} exposed as ${result.exposure?.fqdn || fqdnFor(payload.hostname)}.${warningText}`);
+    const messages = [`${result.name} exposed as ${result.exposure?.fqdn || fqdnFor(payload.hostname)}`];
+    if (result.started) messages.push("Start queued");
+    if (result.warnings?.length) messages.push(result.warnings.join(" "));
+    showToast(messages.join(". "));
     await refresh();
     if (payload.redirect && result.craftyPanelUrl && result.autoRedirect) {
       window.setTimeout(() => {
