@@ -118,10 +118,9 @@ spec:
               protocol: UDP
           resources:
             requests:
-              cpu: "1"
+              cpu: "3"
               memory: 12Gi
             limits:
-              cpu: "6"
               memory: 12Gi
           startupProbe:
             httpGet:
