@@ -1,5 +1,6 @@
 const state = {
   config: null,
+  jars: null,
   token: sessionStorage.getItem("dripcraftPortalToken") || "",
 };
 
@@ -75,7 +76,8 @@ function formPayload(form) {
     name: String(data.get("name") || "").trim(),
     hostname: String(data.get("hostname") || "").trim() || deriveHostname(data.get("name")),
     version: String(data.get("version") || "").trim(),
-    jarType: String(data.get("jarType") || "Paper"),
+    jarType: String(data.get("jarType") || "paper"),
+    category: state.jars?.category || state.config?.defaultCategory || "mc_java_servers",
     memMin: Number(data.get("memMin") || 1),
     memMax: Number(data.get("memMax") || 4),
     autostart: data.get("autostart") === "on",
@@ -143,6 +145,45 @@ async function loadConfig() {
   }
   els.createForm.elements.memMin.value = config.defaultMemMin || 1;
   els.createForm.elements.memMax.value = config.defaultMemMax || 4;
+  els.createForm.elements.jarType.value = config.defaultJarType || "paper";
+}
+
+function updateVersionOptions() {
+  const jarType = els.createForm.elements.jarType.value;
+  const datalist = document.getElementById("versionOptions");
+  datalist.innerHTML = "";
+  const selected = (state.jars?.types || []).find((type) => type.id === jarType);
+  for (const version of selected?.versions || []) {
+    const option = document.createElement("option");
+    option.value = version;
+    datalist.appendChild(option);
+  }
+  const versionInput = els.createForm.elements.version;
+  if (!versionInput.value && selected?.versions?.length) {
+    versionInput.value = selected.versions[0];
+  }
+}
+
+async function loadJars() {
+  if (state.config?.authRequired && !state.token) return;
+  try {
+    state.jars = await api("/api/jars");
+    const select = els.createForm.elements.jarType;
+    const current = select.value || state.config?.defaultJarType || "paper";
+    select.innerHTML = "";
+    for (const type of state.jars.types || []) {
+      const option = document.createElement("option");
+      option.value = type.id;
+      option.textContent = type.name;
+      select.appendChild(option);
+    }
+    select.value = (state.jars.types || []).some((type) => type.id === current)
+      ? current
+      : (state.jars.types || [])[0]?.id || "paper";
+    updateVersionOptions();
+  } catch (error) {
+    showToast(error.message);
+  }
 }
 
 async function refresh() {
@@ -162,7 +203,8 @@ async function createServer(event) {
       method: "POST",
       body: JSON.stringify(payload),
     });
-    showToast(`${result.name} exposed as ${result.exposure?.fqdn || fqdnFor(payload.hostname)}`);
+    const warningText = result.warnings?.length ? ` ${result.warnings.join(" ")}` : "";
+    showToast(`${result.name} exposed as ${result.exposure?.fqdn || fqdnFor(payload.hostname)}.${warningText}`);
     await refresh();
     if (payload.redirect && result.craftyPanelUrl && result.autoRedirect) {
       window.setTimeout(() => {
@@ -235,6 +277,7 @@ els.saveTokenButton.addEventListener("click", async () => {
   sessionStorage.setItem("dripcraftPortalToken", state.token);
   els.authPanel.classList.add("hidden");
   try {
+    await loadJars();
     await refresh();
   } catch (error) {
     sessionStorage.removeItem("dripcraftPortalToken");
@@ -248,6 +291,7 @@ els.refreshButton.addEventListener("click", () => refresh().catch((error) => sho
 els.syncButton.addEventListener("click", () => syncExisting());
 els.createForm.addEventListener("submit", createServer);
 els.serverRows.addEventListener("click", rowAction);
+els.createForm.elements.jarType.addEventListener("change", updateVersionOptions);
 els.createForm.elements.name.addEventListener("input", (event) => {
   const hostInput = els.createForm.elements.hostname;
   if (!hostInput.dataset.touched) hostInput.value = deriveHostname(event.target.value);
@@ -257,5 +301,6 @@ els.createForm.elements.hostname.addEventListener("input", (event) => {
 });
 
 loadConfig()
+  .then(loadJars)
   .then(refresh)
   .catch((error) => showToast(error.message));

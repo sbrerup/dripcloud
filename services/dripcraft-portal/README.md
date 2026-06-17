@@ -29,6 +29,7 @@ The portal uses these defaults:
   certificate in this setup
 - Minecraft backend port range: `25565-25585`
 - Tailnet external Minecraft port: `25565`
+- JAR category/type: `mc_java_servers` / `paper`
 
 Set `TAILSCALE_DOMAIN` in the `dripcraft-portal-config` ConfigMap if you want
 the UI to show full MagicDNS names.

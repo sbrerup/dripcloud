@@ -185,8 +185,8 @@ class Config:
             port_range_start=int_env("PORT_RANGE_START", 25565),
             port_range_end=int_env("PORT_RANGE_END", 25585),
             service_external_port=int_env("SERVICE_EXTERNAL_PORT", 25565),
-            default_category=os.getenv("DEFAULT_JAR_CATEGORY", "Mc_java_servers"),
-            default_jar_type=os.getenv("DEFAULT_JAR_TYPE", "Paper"),
+            default_category=os.getenv("DEFAULT_JAR_CATEGORY", "mc_java_servers"),
+            default_jar_type=os.getenv("DEFAULT_JAR_TYPE", "paper"),
             default_minecraft_version=os.getenv("DEFAULT_MC_VERSION", ""),
             default_mem_min=int_env("DEFAULT_MEM_MIN", 1),
             default_mem_max=int_env("DEFAULT_MEM_MAX", 4),
@@ -315,6 +315,13 @@ class CraftyClient:
             servers.append(normalize_server(server))
         return servers
 
+    def jar_cache(self) -> dict[str, Any]:
+        response = self.request("GET", "/api/v2/crafty/JarCache")
+        data = (response or {}).get("data")
+        if not isinstance(data, dict):
+            raise UpstreamError("Crafty returned an unexpected JarCache response.", details=response, status=502)
+        return data
+
     def get_server(self, server_id: str) -> dict[str, Any]:
         response = self.request("GET", f"/api/v2/servers/{urllib.parse.quote(server_id)}")
         data = (response or {}).get("data")
@@ -324,8 +331,8 @@ class CraftyClient:
 
     def create_java_server(self, request: dict[str, Any], port: int) -> str:
         name = clean_server_name(str(request.get("name", "")))
-        jar_type = str(request.get("jarType") or self.config.default_jar_type).strip()
-        category = str(request.get("category") or self.config.default_category).strip()
+        jar_type = str(request.get("jarType") or self.config.default_jar_type).strip().lower()
+        category = str(request.get("category") or self.config.default_category).strip().lower()
         version = str(request.get("version") or self.config.default_minecraft_version).strip()
         if not version:
             raise ValidationError("Minecraft version is required.")
@@ -369,6 +376,9 @@ class CraftyClient:
         if not server_id:
             raise UpstreamError("Crafty created a server but did not return its id.", details=response, status=502)
         return str(server_id)
+
+    def patch_server_config(self, server_id: str, payload: dict[str, Any]) -> None:
+        self.request("PATCH", f"/api/v2/servers/{urllib.parse.quote(server_id)}", payload)
 
     def delete_server(self, server_id: str, remove_files: bool) -> None:
         files = "true" if remove_files else "false"
@@ -592,6 +602,56 @@ def find_created_server(
     return None
 
 
+def resolve_cache_key(container: dict[str, Any], requested: str, label: str) -> str:
+    normalized = str(requested or "").strip().lower()
+    keys = {str(key).lower(): str(key) for key in container.keys()}
+    if normalized in keys:
+        return keys[normalized]
+    raise ValidationError(f"Unknown {label} '{requested}'.")
+
+
+def resolve_jar_selection(
+    cache: dict[str, Any],
+    category: str,
+    jar_type: str,
+    version: str,
+) -> tuple[str, str, str]:
+    category_key = resolve_cache_key(cache, category, "JAR category")
+    category_data = cache.get(category_key) or {}
+    types = category_data.get("types") or {}
+    if not isinstance(types, dict):
+        raise ValidationError(f"JAR category '{category_key}' has no server types.")
+    type_key = resolve_cache_key(types, jar_type, "JAR type")
+    type_data = types.get(type_key) or {}
+    versions = type_data.get("versions") or {}
+    if not isinstance(versions, dict):
+        raise ValidationError(f"JAR type '{type_key}' has no versions.")
+    version_key = str(version or "").strip()
+    if version_key not in versions:
+        raise ValidationError(f"Unknown {type_key} version '{version_key}'.")
+    return category_key, type_key, version_key
+
+
+def jar_options(cache: dict[str, Any], category: str) -> dict[str, Any]:
+    category_key = resolve_cache_key(cache, category, "JAR category")
+    category_data = cache.get(category_key) or {}
+    types = category_data.get("types") or {}
+    result_types = []
+    for type_id, type_data in sorted(types.items()):
+        versions = type_data.get("versions") or {}
+        result_types.append(
+            {
+                "id": type_id,
+                "name": type_data.get("friendly_name") or str(type_id).replace("-", " ").title(),
+                "versions": list(versions.keys()),
+            }
+        )
+    return {
+        "category": category_key,
+        "types": result_types,
+    }
+
+
 def next_free_port(start: int, end: int, taken: set[int]) -> int:
     for port in range(start, end + 1):
         if port not in taken:
@@ -674,9 +734,24 @@ class App:
             "kubernetesConfigured": self.kube.available,
         }
 
+    def list_jars(self) -> dict[str, Any]:
+        if not self.config.crafty_configured:
+            raise PortalError("Crafty credentials are not configured.", status=503)
+        return jar_options(self.crafty.jar_cache(), self.config.default_category)
+
     def create_server(self, payload: dict[str, Any]) -> dict[str, Any]:
         if not self.config.crafty_configured:
             raise PortalError("Crafty credentials are not configured.", status=503)
+        payload = dict(payload)
+        category, jar_type, version = resolve_jar_selection(
+            self.crafty.jar_cache(),
+            str(payload.get("category") or self.config.default_category),
+            str(payload.get("jarType") or self.config.default_jar_type),
+            str(payload.get("version") or self.config.default_minecraft_version),
+        )
+        payload["category"] = category
+        payload["jarType"] = jar_type
+        payload["version"] = version
         server_name = clean_server_name(str(payload.get("name", "")))
         hostname = sanitize_hostname(str(payload.get("hostname") or payload.get("name") or ""))
         servers = self.crafty.list_servers()
@@ -705,6 +780,18 @@ class App:
             if not created_server or not created_server.get("id"):
                 raise
             server_id = str(created_server["id"])
+        warnings = []
+        try:
+            self.crafty.patch_server_config(
+                server_id,
+                {
+                    "auto_start": bool(payload.get("autostart", True)),
+                    "auto_start_delay": parse_int(payload.get("autostartDelay", 10), "Autostart delay", 0, 3600),
+                    "crash_detection": bool(payload.get("crashDetection", True)),
+                },
+            )
+        except UpstreamError as exc:
+            warnings.append(f"Created server, but could not patch autostart settings: {exc}")
         service = self.kube.create_or_update_service(
             server_id=server_id,
             server_name=server_name,
@@ -719,6 +806,7 @@ class App:
             "exposure": service_summary(service, self.config.tailnet_domain),
             "craftyPanelUrl": self.config.crafty_panel_url,
             "autoRedirect": self.config.auto_redirect,
+            "warnings": warnings,
         }
 
     def expose_server(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -941,6 +1029,9 @@ class PortalHandler(BaseHTTPRequestHandler):
             return
         if method == "GET" and path == "/api/servers":
             json_response(self, 200, {"status": "ok", "data": self.app.list_state()})
+            return
+        if method == "GET" and path == "/api/jars":
+            json_response(self, 200, {"status": "ok", "data": self.app.list_jars()})
             return
         if method == "POST" and path == "/api/servers":
             json_response(self, 201, {"status": "ok", "data": self.app.create_server(read_json(self))})

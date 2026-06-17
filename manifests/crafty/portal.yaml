@@ -11,8 +11,8 @@ data:
   PORT_RANGE_START: "25565"
   PORT_RANGE_END: "25585"
   SERVICE_EXTERNAL_PORT: "25565"
-  DEFAULT_JAR_CATEGORY: "Mc_java_servers"
-  DEFAULT_JAR_TYPE: "Paper"
+  DEFAULT_JAR_CATEGORY: "mc_java_servers"
+  DEFAULT_JAR_TYPE: "paper"
   DEFAULT_MC_VERSION: ""
   DEFAULT_MEM_MIN: "1"
   DEFAULT_MEM_MAX: "4"
@@ -72,6 +72,8 @@ spec:
       app.kubernetes.io/name: dripcraft-portal
   template:
     metadata:
+      annotations:
+        dripcloud.io/portal-revision: "2026-06-17-paper-autostart"
       labels:
         app.kubernetes.io/name: dripcraft-portal
     spec:
