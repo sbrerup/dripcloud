@@ -63,9 +63,14 @@ metadata:
   name: crafty
   labels:
     app.kubernetes.io/name: crafty
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
 spec:
   replicas: 1
   serviceName: crafty-headless
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
   selector:
     matchLabels:
       app.kubernetes.io/name: crafty
@@ -74,6 +79,7 @@ spec:
       labels:
         app.kubernetes.io/name: crafty
     spec:
+      terminationGracePeriodSeconds: 300
       securityContext:
         fsGroup: 0
         fsGroupChangePolicy: OnRootMismatch
@@ -82,8 +88,8 @@ spec:
           image: busybox:1.37
           command:
             - sh
-            - -c
-            - mkdir -p /data/backups /data/logs /data/servers /data/config /data/import && chmod -R 0775 /data
+            - -ec
+            - mkdir -p /data/backups /data/logs /data/servers /data/config /data/import && chmod 0775 /data /data/backups /data/logs /data/servers /data/config /data/import
           volumeMounts:
             - name: crafty-data
               mountPath: /data
@@ -117,6 +123,30 @@ spec:
             limits:
               cpu: "6"
               memory: 8Gi
+          startupProbe:
+            httpGet:
+              scheme: HTTPS
+              path: /
+              port: panel
+            failureThreshold: 36
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              scheme: HTTPS
+              path: /
+              port: panel
+            failureThreshold: 4
+            periodSeconds: 15
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              scheme: HTTPS
+              path: /
+              port: panel
+            failureThreshold: 6
+            periodSeconds: 30
+            timeoutSeconds: 5
           volumeMounts:
             - name: crafty-data
               mountPath: /crafty/backups
@@ -143,3 +173,15 @@ spec:
         resources:
           requests:
             storage: 100Gi
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: crafty
+  labels:
+    app.kubernetes.io/name: crafty
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: crafty

@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Dripcraft</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div class="brand">
+          <div class="mark" aria-hidden="true"></div>
+          <div>
+            <h1>Dripcraft</h1>
+            <p id="subtitle">Minecraft server provisioning</p>
+          </div>
+        </div>
+        <div class="actions">
+          <button class="icon-button" id="refreshButton" type="button" title="Refresh" aria-label="Refresh">
+            <span aria-hidden="true">&#8635;</span>
+          </button>
+          <a class="button secondary" id="craftyLink" href="#" rel="noreferrer">Crafty</a>
+        </div>
+      </header>
+
+      <section class="notice hidden" id="authPanel">
+        <label for="portalToken">Portal token</label>
+        <div class="inline">
+          <input id="portalToken" type="password" autocomplete="current-password">
+          <button class="button" id="saveTokenButton" type="button">Unlock</button>
+        </div>
+      </section>
+
+      <section class="status-grid" id="statusGrid">
+        <div class="metric">
+          <span>Crafty</span>
+          <strong id="craftyStatus">...</strong>
+        </div>
+        <div class="metric">
+          <span>Kubernetes</span>
+          <strong id="kubeStatus">...</strong>
+        </div>
+        <div class="metric">
+          <span>Port Pool</span>
+          <strong id="portPool">...</strong>
+        </div>
+      </section>
+
+      <section class="layout">
+        <form class="panel" id="createForm">
+          <div class="panel-heading">
+            <h2>Create Server</h2>
+          </div>
+          <div class="form-grid">
+            <label>
+              <span>Name</span>
+              <input name="name" type="text" minlength="2" required placeholder="skyblock">
+            </label>
+            <label>
+              <span>Tailnet Host</span>
+              <input name="hostname" type="text" placeholder="skyblock">
+            </label>
+            <label>
+              <span>Version</span>
+              <input name="version" type="text" required placeholder="1.21.8">
+            </label>
+            <label>
+              <span>JAR Type</span>
+              <select name="jarType">
+                <option>Paper</option>
+                <option>Purpur</option>
+                <option>Vanilla</option>
+              </select>
+            </label>
+            <label>
+              <span>Min GiB</span>
+              <input name="memMin" type="number" min="1" max="64" value="1">
+            </label>
+            <label>
+              <span>Max GiB</span>
+              <input name="memMax" type="number" min="1" max="64" value="4">
+            </label>
+          </div>
+          <div class="checks">
+            <label><input name="autostart" type="checkbox" checked> Autostart</label>
+            <label><input name="agreeToEula" type="checkbox" required> EULA accepted</label>
+            <label><input name="redirect" type="checkbox" checked> Open Crafty</label>
+          </div>
+          <button class="button primary" id="createButton" type="submit">Create</button>
+        </form>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <h2>Servers</h2>
+            <div class="heading-actions">
+              <button class="button secondary" id="syncButton" type="button">Sync</button>
+              <span class="count" id="serverCount">0</span>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Port</th>
+                  <th>Tailnet</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="serverRows"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <div class="toast hidden" id="toast"></div>
+    </main>
+    <script src="/static/app.js"></script>
+  </body>
+</html>
