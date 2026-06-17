@@ -80,7 +80,7 @@ spec:
       serviceAccountName: dripcraft-portal
       containers:
         - name: portal
-          image: ghcr.io/sbrerup/dripcraft-portal:833006df382d2a345625916d6719a5af12f416d3
+          image: ghcr.io/sbrerup/dripcraft-portal:d12d85892bfe1b6497b6f13ad6e1b6809a9dd289
           imagePullPolicy: Always
           envFrom:
             - configMapRef:
