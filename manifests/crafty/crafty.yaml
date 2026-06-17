@@ -119,9 +119,9 @@ spec:
           resources:
             requests:
               cpu: "3"
-              memory: 16Gi
+              memory: 11Gi
             limits:
-              memory: 16Gi
+              memory: 11Gi
           startupProbe:
             httpGet:
               scheme: HTTPS
