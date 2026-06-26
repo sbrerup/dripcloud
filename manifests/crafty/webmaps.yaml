@@ -1,0 +1,23 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: crafty-bluemap
+  labels:
+    app.kubernetes.io/name: crafty
+    app.kubernetes.io/component: webmap
+spec:
+  ingressClassName: tailscale
+  tls:
+    - hosts:
+        - dripblockz-map
+  rules:
+    - host: dripblockz-map
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: crafty-tcp
+                port:
+                  name: bluemap

@@ -29,6 +29,12 @@ It creates Crafty servers and matching Tailscale `LoadBalancer` Services in one
 operation. After creating a server, it redirects to Crafty for detailed server
 management.
 
+World map viewers are exposed through Tailscale when the matching Minecraft
+server plugin is installed and listening inside Crafty:
+
+- BlueMap 3D map: `https://dripcraft-map` -> Crafty port `8100`
+- Dynmap 2D/isometric map: `https://dripcraft-dynmap` -> Crafty port `8123`
+
 Operational notes:
 
 - Keep the Crafty image pinned and take a data backup before bumping it.
@@ -39,7 +45,12 @@ Operational notes:
 - Create the Skyblock server on port `25565`; add more Service ports if you
   want Crafty-managed secondary servers reachable from the LAN.
 - Keep Minecraft's configured max heap below the pod memory limit. With the
-  current `8Gi` pod limit, `6Gi` is a safer ceiling for the Java heap.
+  current `11Gi` pod limit, leave headroom for Crafty, plugins, and native
+  memory instead of assigning the whole pod limit to the Java heap.
+- BlueMap/Dynmap are map viewers, not full browser gameplay. Install and
+  configure the chosen plugin through Crafty for the server you want to view;
+  only one server can use each configured web-map port unless you add more
+  Service ports and Ingresses.
 - Crafty backups live on the same retained local PVC as the server data. For a
   true forever server, also back up `/crafty/servers`, `/crafty/backups`, and
   `/crafty/app/config` off the Kubernetes node.
