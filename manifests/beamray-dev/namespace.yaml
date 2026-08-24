@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: beamray-dev
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    beamray.dev/owner: beamray-dev
+    beamray.dev/purpose: local-development
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"

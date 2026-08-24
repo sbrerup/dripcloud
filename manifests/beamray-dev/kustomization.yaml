@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: beamray-dev
+resources:
+  - namespace.yaml
+  - serviceaccounts.yaml
+  - deployer-token.yaml
+  - deployer-role.yaml
+  - deployer-rolebinding.yaml
+  - resourcequota.yaml
+  - limitrange.yaml
+  - networkpolicy.yaml

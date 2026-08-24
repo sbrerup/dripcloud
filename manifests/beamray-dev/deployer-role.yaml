@@ -1,0 +1,44 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: beamray-dev-deployer
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
+rules:
+  - apiGroups: [""]
+    resources:
+      - configmaps
+      - secrets
+      - services
+      - persistentvolumeclaims
+      - pods
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources:
+      - pods/log
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources:
+      - pods/attach
+      - pods/exec
+      - pods/portforward
+    verbs: ["get", "create"]
+  - apiGroups: [""]
+    resources:
+      - events
+      - serviceaccounts
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources:
+      - deployments
+      - statefulsets
+      - replicasets
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["batch"]
+    resources:
+      - jobs
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources:
+      - ingresses
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]

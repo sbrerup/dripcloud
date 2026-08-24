@@ -1,0 +1,89 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: beamray-dev-services
+  annotations:
+    argocd.argoproj.io/sync-wave: "-9"
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    matchPolicy: Equivalent
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["services"]
+        scope: Namespaced
+  validations:
+    - expression: "!has(object.spec.type) || object.spec.type == 'ClusterIP'"
+      message: Only ClusterIP Services are allowed in beamray-dev.
+      reason: Forbidden
+    - expression: "!has(object.spec.externalIPs) || object.spec.externalIPs.size() == 0"
+      message: Service externalIPs are forbidden in beamray-dev.
+      reason: Forbidden
+    - expression: "!has(object.spec.externalName)"
+      message: Service externalName is forbidden in beamray-dev.
+      reason: Forbidden
+    - expression: "!has(object.spec.loadBalancerClass)"
+      message: Service loadBalancerClass is forbidden in beamray-dev.
+      reason: Forbidden
+    - expression: "!has(object.spec.loadBalancerIP)"
+      message: Service loadBalancerIP is forbidden in beamray-dev.
+      reason: Forbidden
+    - expression: "!has(object.spec.ports) || object.spec.ports.all(port, !has(port.nodePort))"
+      message: Service nodePort fields are forbidden in beamray-dev.
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: beamray-dev-services
+  annotations:
+    argocd.argoproj.io/sync-wave: "-8"
+spec:
+  policyName: beamray-dev-services
+  validationActions:
+    - Deny
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        beamray.dev/owner: beamray-dev
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: beamray-dev-ingresses
+  annotations:
+    argocd.argoproj.io/sync-wave: "-9"
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    matchPolicy: Equivalent
+    resourceRules:
+      - apiGroups: ["networking.k8s.io"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["ingresses"]
+        scope: Namespaced
+  validations:
+    - expression: "has(object.spec.ingressClassName) && object.spec.ingressClassName == 'tailscale'"
+      message: Only the tailscale Ingress class is allowed in beamray-dev.
+      reason: Forbidden
+    - expression: "!has(object.metadata.annotations) || !('tailscale.com/funnel' in object.metadata.annotations)"
+      message: Tailscale Funnel is forbidden in beamray-dev.
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: beamray-dev-ingresses
+  annotations:
+    argocd.argoproj.io/sync-wave: "-8"
+spec:
+  policyName: beamray-dev-ingresses
+  validationActions:
+    - Deny
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        beamray.dev/owner: beamray-dev
