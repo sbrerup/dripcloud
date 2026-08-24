@@ -8,9 +8,6 @@ subjects:
   - kind: ServiceAccount
     name: beamray-dev-deployer
     namespace: beamray-agent-identities
-  - kind: ServiceAccount
-    name: beamray-dev-deployer
-    namespace: beamray-dev
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role

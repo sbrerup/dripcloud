@@ -1,8 +1,0 @@
-apiVersion: v1
-kind: Secret
-metadata:
-  name: beamray-dev-deployer-token
-  annotations:
-    kubernetes.io/service-account.name: beamray-dev-deployer
-    argocd.argoproj.io/sync-wave: "-4"
-type: kubernetes.io/service-account-token
