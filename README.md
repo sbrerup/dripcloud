@@ -2,6 +2,15 @@
 
 GitOps for the labmox homelab cluster.
 
+## BeamRay development
+
+`apps/beamray-dev-workloads.yaml` is the parent Application for the private
+BeamRay development environment. It creates the `development` namespace and
+applies the app-of-apps manifests from the separate `beamray-dev` repository.
+All BeamRay child Applications target that namespace with namespace creation
+disabled. Namespace-level workload guardrails live with the parent render;
+cluster-scoped admission policies remain in this repository.
+
 ## DripCraft
 
 Minecraft is managed through Crafty Controller instead of declaring server

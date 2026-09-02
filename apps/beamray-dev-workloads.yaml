@@ -13,12 +13,20 @@ spec:
     path: argocd
   destination:
     server: https://kubernetes.default.svc
-    namespace: argocd
+    namespace: development
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
+    managedNamespaceMetadata:
+      labels:
+        app.kubernetes.io/managed-by: argocd
+        beamray.dev/owner: beamray-dev
+        beamray.dev/purpose: local-development
+        pod-security.kubernetes.io/enforce: restricted
+        pod-security.kubernetes.io/audit: restricted
+        pod-security.kubernetes.io/warn: restricted
     syncOptions:
-      - CreateNamespace=false
+      - CreateNamespace=true
       - PruneLast=true
       - ServerSideApply=true
