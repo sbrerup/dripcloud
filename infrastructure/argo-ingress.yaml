@@ -1,7 +1,7 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: argo-ui-ingress
+  name: dripcd
 spec:
   ingressClassName: tailscale
   tls:
