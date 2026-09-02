@@ -6,9 +6,9 @@ spec:
   ingressClassName: tailscale
   tls:
     - hosts:
-        - argo
+        - dripcd
   rules:
-    - host: argo
+    - host: dripcd
       http:
         paths:
           - path: /
