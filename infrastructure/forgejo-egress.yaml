@@ -1,0 +1,75 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: forgejo-egress
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+    tailscale.com/tailnet-fqdn: git.turtle-vector.ts.net
+  labels:
+    app.kubernetes.io/name: forgejo-egress
+    app.kubernetes.io/part-of: beamray-dev
+spec:
+  type: ExternalName
+  externalName: placeholder
+  ports:
+    - name: https
+      port: 443
+      protocol: TCP
+---
+apiVersion: tailscale.com/v1alpha1
+kind: DNSConfig
+metadata:
+  name: ts-dns
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  nameserver:
+    replicas: 1
+    image:
+      repo: tailscale/k8s-nameserver
+      tag: unstable
+    service:
+      clusterIP: 10.96.0.11
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns
+  namespace: kube-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+data:
+  Corefile: |
+    turtle-vector.ts.net:53 {
+        errors
+        cache 30
+        forward . 10.96.0.11
+    }
+    .:53 {
+        errors
+        health {
+            lameduck 5s
+        }
+        ready
+        log . {
+            class error
+        }
+        prometheus :9153
+
+        kubernetes cluster.local in-addr.arpa ip6.arpa {
+            pods insecure
+            fallthrough in-addr.arpa ip6.arpa
+            ttl 30
+        }
+        forward . /etc/resolv.conf {
+           max_concurrent 1000
+        }
+        cache 30 {
+           disable success cluster.local
+           disable denial cluster.local
+        }
+        loop
+        reload
+        loadbalance
+    }
