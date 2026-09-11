@@ -2,8 +2,8 @@
 
 `apps/firecrawl-network.yaml` registers these policies with the existing Argo CD
 app-of-apps. This application owns only network policies, not the existing
-Firecrawl workloads or the shared `beamray-agent-services` namespace. Commit
-and push these files for Argo CD to adopt and reconcile the policies.
+Firecrawl workloads or the shared `beamray-agent-services` namespace. The
+workloads are managed by `apps/firecrawl.yaml` and `apps/searxng.yaml`.
 
 Both `firecrawl-api` and `firecrawl-playwright` are egress-isolated:
 
@@ -44,7 +44,8 @@ Verified against the running API and Playwright pods after the initial apply:
 - `POST /v2/scrape` for `https://example.com` with `maxAge: 0` returns HTTP 200
   and extracted Markdown.
 
-The policies were initially applied manually before adding them here. Until
-these files are pushed and synced, the live policies are not Argo CD-managed.
+The policies were initially applied manually, then adopted by Argo CD alongside
+the Firecrawl and SearXNG workloads. All three applications were verified Synced
+and Healthy; both search and fresh scraping succeeded after adoption.
 Removing these policies reopens egress; turn off fresh scraping first if rolling
 back. Client-side Pi settings are outside this repository.

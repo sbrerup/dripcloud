@@ -4,3 +4,5 @@
 *.tfstate*
 charts
 secrets.yaml
+__pycache__/
+*.pyc
