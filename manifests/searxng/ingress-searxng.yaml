@@ -1,0 +1,18 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/name: searxng
+  name: searxng
+  namespace: beamray-agent-services
+spec:
+  defaultBackend:
+    service:
+      name: searxng
+      port:
+        number: 80
+  ingressClassName: tailscale
+  tls:
+  - hosts:
+    - searxng

@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: beamray-agent-services
+resources:
+- configmap-firecrawl-config.yaml
+- deployment-firecrawl-api.yaml
+- deployment-firecrawl-nuq-postgres.yaml
+- deployment-firecrawl-playwright.yaml
+- deployment-firecrawl-rabbitmq.yaml
+- deployment-firecrawl-redis.yaml
+- ingress-firecrawl.yaml
+- persistentvolumeclaim-firecrawl-postgres-data.yaml
+- persistentvolumeclaim-firecrawl-rabbitmq-data.yaml
+- persistentvolumeclaim-firecrawl-redis-data.yaml
+- sealedsecret-firecrawl-runtime.yaml
+- service-firecrawl-api.yaml
+- service-firecrawl-nuq-postgres.yaml
+- service-firecrawl-playwright.yaml
+- service-firecrawl-rabbitmq.yaml
+- service-firecrawl-redis.yaml

@@ -1,0 +1,25 @@
+apiVersion: v1
+data:
+  BROWSER_POOL_SIZE: '2'
+  CRAWL_CONCURRENT_REQUESTS: '2'
+  LOGGING_LEVEL: info
+  MAX_CONCURRENT_JOBS: '2'
+  MAX_CPU: '0.85'
+  MAX_RAM: '0.75'
+  NUM_WORKERS_PER_QUEUE: '2'
+  PLAYWRIGHT_MICROSERVICE_URL: http://firecrawl-playwright:3000/scrape
+  POSTGRES_DB: postgres
+  POSTGRES_HOST: firecrawl-nuq-postgres
+  POSTGRES_PORT: '5432'
+  POSTGRES_USER: firecrawl
+  REDIS_RATE_LIMIT_URL: redis://firecrawl-redis:6379
+  REDIS_URL: redis://firecrawl-redis:6379
+  SEARXNG_ENDPOINT: http://searxng
+  USE_DB_AUTHENTICATION: 'false'
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/part-of: firecrawl
+  name: firecrawl-config
+  namespace: beamray-agent-services

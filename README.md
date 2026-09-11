@@ -2,6 +2,18 @@
 
 GitOps for the labmox homelab cluster.
 
+## Web search and scraping
+
+Argo CD manages SearXNG and the complete Firecrawl stack in
+`beamray-agent-services` through `apps/searxng.yaml`, `apps/firecrawl.yaml`,
+and `apps/firecrawl-network.yaml`. These adopt the existing workloads, storage,
+and Tailscale endpoints. Credentials are encrypted with Sealed Secrets; data
+claims are protected from automatic pruning.
+
+See [Firecrawl operations](manifests/firecrawl/README.md),
+[SearXNG](manifests/searxng/README.md), and
+[network isolation](manifests/firecrawl-network/README.md).
+
 ## BeamRay development
 
 `apps/beamray-dev-workloads.yaml` is the parent Application for the private

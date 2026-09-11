@@ -1,0 +1,13 @@
+apiVersion: v1
+data:
+  settings.yml: "use_default_settings: true\ngeneral:\n  instance_name: \"Beamray\
+    \ Agent Search\"\n  enable_metrics: false\nsearch:\n  safe_search: 0\n  autocomplete:\
+    \ \"\"\n  formats:\n    - html\n    - json\nserver:\n  limiter: false\n  public_instance:\
+    \ false\n  image_proxy: false\n  method: GET\n"
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/name: searxng
+  name: searxng-settings
+  namespace: beamray-agent-services

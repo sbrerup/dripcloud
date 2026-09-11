@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/name: firecrawl-api
+    app.kubernetes.io/part-of: firecrawl
+  name: firecrawl-api
+  namespace: beamray-agent-services
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: firecrawl-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: firecrawl-api
+        app.kubernetes.io/part-of: firecrawl
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - command:
+        - node
+        - dist/src/harness.js
+        - --start-docker
+        env:
+        - name: HOST
+          value: 0.0.0.0
+        - name: PORT
+          value: '3002'
+        - name: EXTRACT_WORKER_PORT
+          value: '3004'
+        - name: WORKER_PORT
+          value: '3005'
+        - name: NUQ_RABBITMQ_URL
+          value: amqp://firecrawl-rabbitmq:5672
+        - name: HARNESS_STARTUP_TIMEOUT_MS
+          value: '120000'
+        - name: ENV
+          value: local
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_PASSWORD
+              name: firecrawl-runtime
+        - name: BULL_AUTH_KEY
+          valueFrom:
+            secretKeyRef:
+              key: BULL_AUTH_KEY
+              name: firecrawl-runtime
+        envFrom:
+        - configMapRef:
+            name: firecrawl-config
+        image: ghcr.io/firecrawl/firecrawl@sha256:4546c7c3ff9636cda15cbd6fb9132e4b198f18c9076bf687a486c8b94845cd19
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          httpGet:
+            path: /v0/health/liveness
+            port: http
+          initialDelaySeconds: 90
+          periodSeconds: 30
+          timeoutSeconds: 5
+        name: api
+        ports:
+        - containerPort: 3002
+          name: http
+        readinessProbe:
+          httpGet:
+            path: /v0/health/readiness
+            port: http
+          initialDelaySeconds: 60
+          periodSeconds: 15
+          timeoutSeconds: 5
+        resources:
+          limits:
+            cpu: '2'
+            memory: 5Gi
+          requests:
+            cpu: '1'
+            memory: 2Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          runAsGroup: 1000
+          runAsNonRoot: true
+          runAsUser: 1000
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 180
