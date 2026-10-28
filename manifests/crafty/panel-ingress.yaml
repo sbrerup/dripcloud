@@ -1,0 +1,23 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: crafty-panel
+  labels:
+    app.kubernetes.io/name: crafty
+    app.kubernetes.io/component: panel
+spec:
+  ingressClassName: tailscale
+  tls:
+    - hosts:
+        - crafty
+  rules:
+    - host: crafty
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: crafty-panel
+                port:
+                  name: https

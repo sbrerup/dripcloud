@@ -11,6 +11,21 @@ spec:
       port: 8443
       targetPort: panel
 ---
+# Crafty panel (JAR uploads, server console) is reachable only through the
+# Tailscale Ingress in panel-ingress.yaml, never on the LAN load balancer.
+apiVersion: v1
+kind: Service
+metadata:
+  name: crafty-panel
+spec:
+  selector:
+    app.kubernetes.io/name: crafty
+  ports:
+    - name: https
+      port: 443
+      targetPort: panel
+      protocol: TCP
+---
 apiVersion: v1
 kind: Service
 metadata:
@@ -23,10 +38,6 @@ spec:
   selector:
     app.kubernetes.io/name: crafty
   ports:
-    - name: panel
-      port: 8443
-      targetPort: panel
-      protocol: TCP
     - name: minecraft
       port: 25565
       targetPort: minecraft

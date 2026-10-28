@@ -6,7 +6,7 @@ metadata:
     app.kubernetes.io/name: dripcraft-portal
 data:
   CRAFTY_BASE_URL: "https://crafty-headless:8443"
-  CRAFTY_PANEL_URL: "https://10.1.2.250:8443"
+  CRAFTY_PANEL_URL: "https://crafty.turtle-vector.ts.net"
   CRAFTY_TLS_VERIFY: "false"
   PORT_RANGE_START: "25565"
   PORT_RANGE_END: "25585"

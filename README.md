@@ -32,8 +32,10 @@ Argo CD owns:
 
 - the Crafty workload
 - the retained PVC
-- LAN load balancer services
+- LAN load balancer services (game ports only)
+- the Tailscale Ingress for the Crafty panel
 - the Cilium load balancer IP pool
+- NetworkPolicies isolating Crafty from the LAN and the rest of the cluster
 
 Crafty owns:
 
@@ -43,7 +45,8 @@ Crafty owns:
 - server file editing and uploads
 - Minecraft-level backup schedules
 
-The Crafty panel is exposed at `https://10.1.2.250:8443`.
+The Crafty panel is exposed only on the tailnet at `https://crafty`. It is not
+on the LAN load balancer (`10.1.2.250`), which carries game and map ports only.
 
 The Dripcraft portal is exposed through Tailscale as `https://dripcraft`.
 It creates Crafty servers and matching Tailscale `LoadBalancer` Services in one
