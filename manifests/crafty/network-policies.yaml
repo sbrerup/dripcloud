@@ -27,13 +27,13 @@ spec:
         - {protocol: TCP, port: 8100}
         - {protocol: TCP, port: 8123}
     # Secondary servers are exposed only through portal-created Tailscale
-    # LoadBalancers (PORT_RANGE_START..PORT_RANGE_END in portal.yaml).
+    # LoadBalancers (EXPOSE_ALLOWED_PORTS in portal.yaml).
     - from:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: tailscale
       ports:
-        - {protocol: TCP, port: 25566, endPort: 25585}
+        - {protocol: TCP, port: 25566, endPort: 25665}
     - from:
         - podSelector:
             matchLabels:
