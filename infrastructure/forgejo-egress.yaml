@@ -29,7 +29,7 @@ spec:
     image:
       repo: tailscale/k8s-nameserver
       # Keep in step with the operator chart version in tailscale-app.yaml.
-      tag: v1.96.5
+      tag: v1.104.2
     service:
       clusterIP: 10.96.0.11
 ---
