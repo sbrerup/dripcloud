@@ -3,6 +3,10 @@ kind: Application
 metadata:
   name: dripcraft
   namespace: argocd
+  annotations:
+    # Client-side diff flags the API server's volumeClaimTemplates defaults on
+    # the crafty StatefulSet, leaving the app OutOfSync and self-heal looping.
+    argocd.argoproj.io/compare-options: ServerSideDiff=true
 spec:
   project: default
   source:
