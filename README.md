@@ -99,3 +99,15 @@ kubectl -n dripcraft create secret generic dripcraft-portal-crafty `
 
 If GHCR publishes the portal image as private, either make the package public or
 add an image pull secret for `ghcr.io/sbrerup/dripcraft-portal:latest`.
+
+## Updates
+
+- **Proxmox host:** Debian security updates install automatically every day
+  (`/etc/apt/apt.conf.d/52unattended-upgrades-labmox`; no automatic reboots).
+  Proxmox packages and kernels stay manual: once a month run
+  `apt update && apt full-upgrade` on labmox and reboot if a new kernel came in.
+- **Cluster:** Renovate (`renovate.json5`) opens weekly PRs for container images,
+  Helm charts and GitHub Actions. Nothing auto-merges, because Argo CD deploys
+  `main` as soon as it changes. Major updates and Crafty bumps wait for approval
+  on the Dependency Dashboard issue.
+- **Talos and Kubernetes:** upgraded by hand with `talosctl`.

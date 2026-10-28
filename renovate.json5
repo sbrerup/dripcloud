@@ -1,0 +1,54 @@
+{
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: [
+    'config:recommended',
+    'docker:pinDigests',
+    'helpers:pinGitHubActionDigests',
+    ':dependencyDashboard',
+    'schedule:weekly',
+  ],
+  timezone: 'Europe/Copenhagen',
+  // Argo CD deploys main automatically, so every update is a reviewed PR.
+  automerge: false,
+  prConcurrentLimit: 5,
+  kubernetes: {
+    managerFilePatterns: ['/^(manifests|infrastructure)/.+\\.ya?ml$/'],
+  },
+  argocd: {
+    managerFilePatterns: ['/^(apps|infrastructure)/.+\\.ya?ml$/'],
+  },
+  customManagers: [
+    {
+      customType: 'regex',
+      description: 'Tailscale nameserver image in the DNSConfig (repo/tag fields, not an image string)',
+      managerFilePatterns: ['/^infrastructure/forgejo-egress\\.yaml$/'],
+      matchStrings: [
+        'repo: (?<depName>tailscale/k8s-nameserver)\\r?\\n(?:\\s*#[^\\n]*\\n)?\\s*tag: (?<currentValue>v[0-9.]+)',
+      ],
+      datasourceTemplate: 'docker',
+    },
+  ],
+  packageRules: [
+    {
+      description: 'The operator chart and its nameserver image move together',
+      matchPackageNames: ['tailscale-operator', 'tailscale/k8s-nameserver'],
+      groupName: 'tailscale',
+    },
+    {
+      description: 'Crafty holds the Minecraft worlds: back up before bumping (README: DripCraft)',
+      matchPackageNames: ['arcadiatechnology/crafty-4'],
+      dependencyDashboardApproval: true,
+      prBodyNotes: ['Take a Crafty data backup before merging this.'],
+    },
+    {
+      description: 'The portal image tag is the commit SHA built by CI',
+      matchPackageNames: ['ghcr.io/sbrerup/dripcraft-portal'],
+      enabled: false,
+    },
+    {
+      description: 'Major updates wait for approval on the Dependency Dashboard',
+      matchUpdateTypes: ['major'],
+      dependencyDashboardApproval: true,
+    },
+  ],
+}
