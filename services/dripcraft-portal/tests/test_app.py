@@ -25,6 +25,8 @@ from app import (
 STATIC_ROOT = Path(portal.__file__).resolve().parent / "static"
 TOKEN = "correct-horse-battery-staple"
 SERVER_ID = "3f0c1d9e-8a4b-4c2d-9e1f-0a1b2c3d4e5f"
+OTHER_SERVER_ID = "9b7e6d5c-4a3b-4c2d-8e1f-123456789abc"
+JAR_CACHE = {"mc_java_servers": {"types": {"paper": {"versions": {"1.21.8": {}}}}}}
 
 
 def make_config(**env: str | None) -> portal.Config:
@@ -42,10 +44,24 @@ def make_config(**env: str | None) -> portal.Config:
 class FakeCrafty:
     def __init__(self):
         self.calls = []
+        self.servers = [{"id": SERVER_ID, "name": "Skyblock", "port": 25566, "raw": {}}]
 
     def list_servers(self):
         self.calls.append(("list",))
-        return [{"id": SERVER_ID, "name": "Skyblock", "port": 25566, "raw": {}}]
+        return [dict(server) for server in self.servers]
+
+    def jar_cache(self):
+        return JAR_CACHE
+
+    def create_java_server(self, request, port):
+        self.calls.append(("create", request["name"], port))
+        return OTHER_SERVER_ID
+
+    def patch_server_config(self, server_id, payload):
+        self.calls.append(("patch", server_id))
+
+    def start_server(self, server_id):
+        self.calls.append(("start", server_id))
 
     def delete_server(self, server_id, remove_files):
         self.calls.append(("delete", server_id, remove_files))
@@ -443,6 +459,174 @@ class SecurityHeadersTest(PortalServerTestCase):
         self.assertNotIn("<style", html)
         self.assertNotIn("style=", html)
         self.assertNotRegex(html, r"<script(?![^>]*\bsrc=)")
+
+
+class ServerIdValidationTest(unittest.TestCase):
+    def test_accepts_crafty_uuids(self):
+        self.assertEqual(portal.validate_server_id(SERVER_ID), SERVER_ID)
+        self.assertEqual(portal.validate_server_id(SERVER_ID.upper()), SERVER_ID.upper())
+
+    def test_rejects_anything_else(self):
+        for value in (
+            "",
+            None,
+            "1",
+            "abc-123",
+            "../../api/v2/users",
+            "..%2F..%2Fapi",
+            f"{SERVER_ID}/../users",
+            f"{SERVER_ID}?files=true",
+            f"{SERVER_ID}\n",
+            f" {SERVER_ID}",
+            SERVER_ID.replace("-", ""),
+        ):
+            with self.subTest(value=value):
+                with self.assertRaises(portal.ValidationError):
+                    portal.validate_server_id(value)
+
+    def test_crafty_paths_are_validated_and_fully_escaped(self):
+        crafty = portal.CraftyClient(make_config())
+        calls = []
+        crafty.request = lambda method, path, body=None: calls.append((method, path, body))
+        crafty.delete_server(SERVER_ID, True)
+        crafty.start_server(SERVER_ID)
+        crafty.patch_server_config(SERVER_ID, {"auto_start": True})
+        self.assertEqual(
+            calls,
+            [
+                ("DELETE", f"/api/v2/servers/{SERVER_ID}?files=true", None),
+                ("POST", f"/api/v2/servers/{SERVER_ID}/action/start_server", None),
+                ("PATCH", f"/api/v2/servers/{SERVER_ID}", {"auto_start": True}),
+            ],
+        )
+        with self.assertRaises(portal.ValidationError):
+            crafty.delete_server("../../api/v2/users", True)
+        with self.assertRaises(portal.ValidationError):
+            crafty.get_server("a/b")
+        self.assertEqual(len(calls), 3)
+
+
+class PathSafetyTest(PortalServerTestCase):
+    def setUp(self):
+        super().setUp()
+        # Real Crafty client with only the HTTP call stubbed, to see the upstream path.
+        self.crafty_paths = []
+        self.app.crafty = portal.CraftyClient(self.app.config)
+        self.app.crafty.request = lambda method, path, body=None: self.crafty_paths.append((method, path))
+
+    def test_delete_uses_validated_id(self):
+        response, payload = self.request("DELETE", f"/api/servers/{SERVER_ID}?files=true")
+        self.assertEqual(response.status, 200)
+        self.assertEqual(self.crafty_paths, [("DELETE", f"/api/v2/servers/{SERVER_ID}?files=true")])
+
+    def test_encoded_traversal_is_rejected(self):
+        for path in (
+            "/api/servers/..%2F..%2Fapi%2Fv2%2Fusers?files=true",
+            "/api/servers/..%2f?files=true",
+            f"/api/servers/{SERVER_ID}%2F..%2F..%2Fusers?files=true",
+            "/api/servers/%2e%2e?files=true",
+            "/api/servers/1?files=true",
+            "/api/exposures/..%2F..%2Fapi%2Fv2%2Fusers",
+        ):
+            with self.subTest(path=path):
+                response, payload = self.request("DELETE", path)
+                self.assertEqual(response.status, 400)
+                self.assertEqual(payload["error"], "VALIDATION_ERROR")
+        response, payload = self.request("DELETE", "/api/servers/../users?files=true")
+        self.assertEqual(response.status, 404)
+        self.assertEqual(self.crafty_paths, [])
+        self.assertEqual(self.app.kube.calls, [])
+
+    def test_expose_rejects_bad_server_id(self):
+        response, payload = self.request(
+            "POST",
+            "/api/exposures",
+            json_body={"serverId": "../x", "hostname": "sky", "port": 25566},
+        )
+        self.assertEqual(response.status, 400)
+        self.assertEqual(self.app.kube.calls, [])
+
+
+class PortAllowlistTest(unittest.TestCase):
+    def test_parse_port_ranges(self):
+        self.assertEqual(
+            portal.parse_port_ranges("25565-25600, 8100 ,"),
+            ((25565, 25600), (8100, 8100)),
+        )
+        for value in ("", ",", "abc", "0-10", "10-5", "25565-70000", "1-2-3"):
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError):
+                    portal.parse_port_ranges(value)
+
+    def test_default_allows_only_minecraft_range(self):
+        ranges = make_config().expose_port_ranges
+        for port in (25565, 25585, 25665):
+            self.assertTrue(portal.port_allowed(port, ranges), port)
+        for port in (8443, 8000, 8100, 8123, 19132, 22, 6443, 25564, 25666):
+            self.assertFalse(portal.port_allowed(port, ranges), port)
+
+    def test_crafty_panel_ports_are_never_allowed(self):
+        ranges = make_config(EXPOSE_ALLOWED_PORTS="1-65535").expose_port_ranges
+        self.assertFalse(portal.port_allowed(8443, ranges))
+        self.assertFalse(portal.port_allowed(8000, ranges))
+        self.assertTrue(portal.port_allowed(8100, ranges))
+
+    def test_invalid_allowlist_fails_at_startup(self):
+        with self.assertRaises(ValueError):
+            make_config(EXPOSE_ALLOWED_PORTS="minecraft")
+
+    def test_create_checks_port_before_calling_crafty(self):
+        app = portal.App(make_config(PORT_RANGE_START="8443", PORT_RANGE_END="8443"))
+        app.crafty = FakeCrafty()
+        app.kube = FakeKube()
+        with self.assertRaises(portal.ValidationError):
+            app.create_server({"name": "Sky", "version": "1.21.8", "agreeToEula": True})
+        self.assertNotIn("create", [call[0] for call in app.crafty.calls])
+        self.assertEqual(app.kube.calls, [])
+
+
+class ExposurePortTest(PortalServerTestCase):
+    def expose(self, port):
+        return self.request(
+            "POST",
+            "/api/exposures",
+            json_body={"serverId": SERVER_ID, "name": "Skyblock", "hostname": "sky", "port": port},
+        )
+
+    def test_non_minecraft_ports_are_refused(self):
+        for port in (8443, 8000, 8100, 8123, 22, 65535):
+            with self.subTest(port=port):
+                response, payload = self.expose(port)
+                self.assertEqual(response.status, 400)
+        self.assertEqual(self.app.kube.calls, [])
+
+    def test_minecraft_port_is_exposed(self):
+        response, payload = self.expose(25570)
+        self.assertEqual(response.status, 201)
+        self.assertEqual(self.app.kube.calls[0][1]["target_port"], 25570)
+
+    def test_sync_skips_disallowed_ports(self):
+        self.app.crafty.servers = [
+            {"id": SERVER_ID, "name": "Panel", "port": 8443},
+            {"id": OTHER_SERVER_ID, "name": "Skyblock", "port": 25566},
+        ]
+        response, payload = self.request("POST", "/api/sync")
+        self.assertEqual(response.status, 200)
+        self.assertEqual(payload["data"]["createdCount"], 1)
+        self.assertEqual(payload["data"]["skipped"][0]["reason"], "port_not_allowed")
+        self.assertEqual([call[1]["target_port"] for call in self.app.kube.calls], [25566])
+
+
+class ConfiguredExposurePortTest(ExposurePortTest):
+    env = {"EXPOSE_ALLOWED_PORTS": "25565-25570,8100"}
+
+    def test_non_minecraft_ports_are_refused(self):
+        response, payload = self.expose(8100)
+        self.assertEqual(response.status, 201)
+        for port in (8443, 25571):
+            with self.subTest(port=port):
+                response, payload = self.expose(port)
+                self.assertEqual(response.status, 400)
 
 
 if __name__ == "__main__":

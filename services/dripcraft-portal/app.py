@@ -24,6 +24,11 @@ SERVER_ID_LABEL = "dripcloud.io/crafty-server-id"
 SERVER_HOSTNAME_LABEL = "dripcloud.io/hostname"
 SERVER_NAME_ANNOTATION = "dripcloud.io/crafty-server-name"
 TARGET_PORT_ANNOTATION = "dripcloud.io/target-port"
+# Crafty 4.4+ identifies servers by UUID (the deployed 4.10 has no numeric ids).
+SERVER_ID_PATTERN = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+# Crafty panel (HTTPS) and HTTP ports on the Crafty pod; never exposable.
+FORBIDDEN_EXPOSE_PORTS = frozenset({8000, 8443})
+DEFAULT_EXPOSE_ALLOWED_PORTS = "25565-25665"
 MAX_BODY_BYTES = 64 * 1024
 STATE_CHANGING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 SECURITY_HEADERS = {
@@ -116,6 +121,39 @@ def clean_server_name(value: str) -> str:
     return value
 
 
+def validate_server_id(value: Any) -> str:
+    server_id = str(value or "")
+    if not SERVER_ID_PATTERN.fullmatch(server_id):
+        raise ValidationError("Server id must be a Crafty server UUID.")
+    return server_id
+
+
+def parse_port_ranges(value: str) -> tuple[tuple[int, int], ...]:
+    ranges = []
+    for part in value.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        start_text, separator, end_text = part.partition("-")
+        try:
+            start = int(start_text)
+            end = int(end_text) if separator else start
+        except ValueError as exc:
+            raise ValueError(f"Invalid port range '{part}'.") from exc
+        if not 1 <= start <= end <= 65535:
+            raise ValueError(f"Invalid port range '{part}'.")
+        ranges.append((start, end))
+    if not ranges:
+        raise ValueError("Port allowlist cannot be empty.")
+    return tuple(ranges)
+
+
+def port_allowed(port: int, ranges: tuple[tuple[int, int], ...]) -> bool:
+    if port in FORBIDDEN_EXPOSE_PORTS:
+        return False
+    return any(start <= port <= end for start, end in ranges)
+
+
 def parse_int(value: Any, name: str, minimum: int, maximum: int) -> int:
     try:
         parsed = int(value)
@@ -179,6 +217,7 @@ class Config:
     port_range_start: int
     port_range_end: int
     service_external_port: int
+    expose_port_ranges: tuple[tuple[int, int], ...]
     default_category: str
     default_jar_type: str
     default_minecraft_version: str
@@ -204,6 +243,7 @@ class Config:
             port_range_start=int_env("PORT_RANGE_START", 25565),
             port_range_end=int_env("PORT_RANGE_END", 25585),
             service_external_port=int_env("SERVICE_EXTERNAL_PORT", 25565),
+            expose_port_ranges=parse_port_ranges(os.getenv("EXPOSE_ALLOWED_PORTS") or DEFAULT_EXPOSE_ALLOWED_PORTS),
             default_category=os.getenv("DEFAULT_JAR_CATEGORY", "mc_java_servers"),
             default_jar_type=os.getenv("DEFAULT_JAR_TYPE", "paper"),
             default_minecraft_version=os.getenv("DEFAULT_MC_VERSION", ""),
@@ -342,8 +382,14 @@ class CraftyClient:
             raise UpstreamError("Crafty returned an unexpected JarCache response.", details=response, status=502)
         return data
 
+    @staticmethod
+    def server_path(server_id: str, suffix: str = "") -> str:
+        # Validate and fully escape so an id can never add path segments.
+        quoted = urllib.parse.quote(validate_server_id(server_id), safe="")
+        return f"/api/v2/servers/{quoted}{suffix}"
+
     def get_server(self, server_id: str) -> dict[str, Any]:
-        response = self.request("GET", f"/api/v2/servers/{urllib.parse.quote(server_id)}")
+        response = self.request("GET", self.server_path(server_id))
         data = (response or {}).get("data")
         if not isinstance(data, dict):
             raise UpstreamError("Crafty returned an unexpected server detail.", details=response, status=502)
@@ -398,14 +444,14 @@ class CraftyClient:
         return str(server_id)
 
     def patch_server_config(self, server_id: str, payload: dict[str, Any]) -> None:
-        self.request("PATCH", f"/api/v2/servers/{urllib.parse.quote(server_id)}", payload)
+        self.request("PATCH", self.server_path(server_id), payload)
 
     def start_server(self, server_id: str) -> None:
-        self.request("POST", f"/api/v2/servers/{urllib.parse.quote(server_id)}/action/start_server")
+        self.request("POST", self.server_path(server_id, "/action/start_server"))
 
     def delete_server(self, server_id: str, remove_files: bool) -> None:
         files = "true" if remove_files else "false"
-        self.request("DELETE", f"/api/v2/servers/{urllib.parse.quote(server_id)}?files={files}")
+        self.request("DELETE", self.server_path(server_id, f"?files={files}"))
 
 
 class KubernetesClient:
@@ -790,6 +836,8 @@ class App:
                 self.config.port_range_end,
                 used_ports(servers, services),
             )
+        # Check before Crafty creates anything we could not expose afterwards.
+        self.require_exposable_port(port)
         try:
             server_id = self.crafty.create_java_server(payload, port)
         except UpstreamError:
@@ -843,13 +891,18 @@ class App:
             "warnings": warnings,
         }
 
+    def require_exposable_port(self, port: int) -> int:
+        if not port_allowed(port, self.config.expose_port_ranges):
+            raise ValidationError(f"Port {port} is not allowed for Tailnet exposure.")
+        return port
+
     def expose_server(self, payload: dict[str, Any]) -> dict[str, Any]:
-        server_id = str(payload.get("serverId") or "")
-        if not server_id:
+        if not payload.get("serverId"):
             raise ValidationError("Server id is required.")
+        server_id = validate_server_id(payload.get("serverId"))
         server_name = clean_server_name(str(payload.get("name") or server_id))
         hostname = sanitize_hostname(str(payload.get("hostname") or server_name))
-        target_port = parse_int(payload.get("port"), "Target port", 1, 65535)
+        target_port = self.require_exposable_port(parse_int(payload.get("port"), "Target port", 1, 65535))
         service = self.kube.create_or_update_service(
             server_id=server_id,
             server_name=server_name,
@@ -892,6 +945,9 @@ class App:
             if not isinstance(port, int):
                 skipped.append({"serverId": server_id, "name": server_name, "reason": "missing_port"})
                 continue
+            if not port_allowed(port, self.config.expose_port_ranges):
+                skipped.append({"serverId": server_id, "name": server_name, "reason": "port_not_allowed"})
+                continue
 
             hostname = unique_hostname(str(server_name), used_service_hostnames, str(server_id))
             service = self.kube.create_or_update_service(
@@ -920,6 +976,7 @@ class App:
     def delete_server(self, server_id: str, remove_files: bool) -> dict[str, Any]:
         if not server_id:
             raise ValidationError("Server id is required.")
+        server_id = validate_server_id(server_id)
         self.crafty.delete_server(server_id, remove_files)
         removed_exposure = self.kube.delete_service_for_server(server_id)
         return {
@@ -930,7 +987,8 @@ class App:
     def delete_exposure(self, server_id: str) -> dict[str, Any]:
         if not server_id:
             raise ValidationError("Server id is required.")
-        removed = self.kube.delete_service_for_server(server_id)
+        server_id = validate_server_id(server_id)
+        removed =self.kube.delete_service_for_server(server_id)
         return {
             "serverId": server_id,
             "removed": removed,

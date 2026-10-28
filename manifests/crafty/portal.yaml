@@ -11,6 +11,8 @@ data:
   PORT_RANGE_START: "25565"
   PORT_RANGE_END: "25585"
   SERVICE_EXTERNAL_PORT: "25565"
+  # Crafty pod ports the portal may publish on the tailnet (8443/8000 are always refused).
+  EXPOSE_ALLOWED_PORTS: "25565-25665"
   DEFAULT_JAR_CATEGORY: "mc_java_servers"
   DEFAULT_JAR_TYPE: "paper"
   DEFAULT_MC_VERSION: ""
