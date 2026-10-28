@@ -28,7 +28,8 @@ spec:
     replicas: 1
     image:
       repo: tailscale/k8s-nameserver
-      tag: unstable
+      # Keep in step with the operator chart version in tailscale-app.yaml.
+      tag: v1.96.5
     service:
       clusterIP: 10.96.0.11
 ---
