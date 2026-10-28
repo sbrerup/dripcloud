@@ -1,0 +1,176 @@
+# Guardrails for the beamray-dev app-of-apps, whose manifests come from a
+# separate repository. That repository renders its own child Applications and
+# their AppProject, so everything it may put in argocd is checked here:
+# - the parent Application runs in beamray-dev-parent (namespaced kinds only),
+# - objects it manages in argocd must be Applications in project beamray-dev
+#   or the beamray-dev AppProject itself, within fixed bounds,
+# - the development namespace keeps the restricted Pod Security level.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: development
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    beamray.dev/owner: beamray-dev
+    beamray.dev/purpose: local-development
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: beamray-dev-parent
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+spec:
+  description: beamray-dev app-of-apps render (see beamray-dev-argocd-objects)
+  sourceRepos:
+    - https://git.turtle-vector.ts.net/beamray/beamray-dev.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: development
+    - server: https://kubernetes.default.svc
+      namespace: argocd
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - {group: argoproj.io, kind: Application}
+    - {group: argoproj.io, kind: AppProject}
+    - {group: "", kind: LimitRange}
+    - {group: "", kind: ResourceQuota}
+    - {group: "", kind: ServiceAccount}
+    - {group: networking.k8s.io, kind: NetworkPolicy}
+    - {group: rbac.authorization.k8s.io, kind: Role}
+    - {group: rbac.authorization.k8s.io, kind: RoleBinding}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: beamray-dev-argocd-objects
+  annotations:
+    argocd.argoproj.io/sync-wave: "-9"
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    matchPolicy: Equivalent
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: argocd
+    resourceRules:
+      - apiGroups: ["*"]
+        apiVersions: ["*"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["*"]
+        scope: Namespaced
+  # Argo CD stamps the tracking id on everything it applies, overwriting any
+  # value in the rendered manifest.
+  matchConditions:
+    - name: managed-by-beamray-dev-workloads
+      expression: >-
+        has(object.metadata.annotations) &&
+        'argocd.argoproj.io/tracking-id' in object.metadata.annotations &&
+        object.metadata.annotations['argocd.argoproj.io/tracking-id'].startsWith('beamray-dev-workloads:')
+  variables:
+    - name: repo
+      expression: "'https://git.turtle-vector.ts.net/beamray/beamray-dev.git'"
+    - name: allowedChildKinds
+      expression: >-
+        ['/ConfigMap', '/Service', '/PersistentVolumeClaim', 'apps/StatefulSet',
+        'apps/Deployment', 'batch/Job', 'networking.k8s.io/Ingress',
+        'bitnami.com/SealedSecret', 'postgresql.cnpg.io/Cluster',
+        'postgresql.cnpg.io/Database']
+  validations:
+    - expression: "object.kind in ['Application', 'AppProject']"
+      message: beamray-dev-workloads may only manage Applications and the beamray-dev AppProject in argocd.
+    - expression: "object.kind != 'Application' || object.spec.project == 'beamray-dev'"
+      message: beamray-dev child Applications must use the beamray-dev project.
+    - expression: >-
+        object.kind != 'Application' ||
+        (has(object.spec.destination.namespace) && object.spec.destination.namespace == 'development')
+      message: beamray-dev child Applications must target the development namespace.
+    - expression: >-
+        object.kind != 'Application' || !has(object.spec.syncPolicy) ||
+        (!has(object.spec.syncPolicy.managedNamespaceMetadata) &&
+        (!has(object.spec.syncPolicy.syncOptions) ||
+        !object.spec.syncPolicy.syncOptions.exists(o, o == 'CreateNamespace=true')))
+      message: beamray-dev child Applications may not create or label namespaces.
+    - expression: "object.kind != 'AppProject' || object.metadata.name == 'beamray-dev'"
+      message: beamray-dev-workloads may only manage the beamray-dev AppProject.
+    - expression: >-
+        object.kind != 'AppProject' ||
+        (has(object.spec.sourceRepos) && object.spec.sourceRepos == [variables.repo])
+      message: The beamray-dev project may only source the beamray-dev repository.
+    - expression: >-
+        object.kind != 'AppProject' ||
+        (has(object.spec.destinations) && object.spec.destinations.all(d,
+        has(d.namespace) && d.namespace == 'development' &&
+        has(d.server) && d.server == 'https://kubernetes.default.svc' && !has(d.name)))
+      message: The beamray-dev project may only deploy to the development namespace.
+    - expression: >-
+        object.kind != 'AppProject' ||
+        !has(object.spec.clusterResourceWhitelist) || object.spec.clusterResourceWhitelist.size() == 0
+      message: The beamray-dev project may not allow cluster-scoped resources.
+    - expression: >-
+        object.kind != 'AppProject' ||
+        (has(object.spec.namespaceResourceWhitelist) && object.spec.namespaceResourceWhitelist.all(r,
+        ((has(r.group) ? r.group : '') + '/' + r.kind) in variables.allowedChildKinds))
+      message: The beamray-dev project may only allow the reviewed set of workload kinds.
+    - expression: >-
+        object.kind != 'AppProject' ||
+        (!has(object.spec.sourceNamespaces) && !has(object.spec.destinationServiceAccounts) &&
+        (!has(object.spec.roles) || object.spec.roles.size() == 0))
+      message: The beamray-dev project may not define roles, source namespaces or impersonation.
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: beamray-dev-argocd-objects
+  annotations:
+    argocd.argoproj.io/sync-wave: "-8"
+spec:
+  policyName: beamray-dev-argocd-objects
+  # Warn first; switch to Deny once the live Applications pass cleanly.
+  validationActions:
+    - Warn
+    - Audit
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: beamray-dev-namespace
+  annotations:
+    argocd.argoproj.io/sync-wave: "-9"
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    matchPolicy: Equivalent
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["namespaces"]
+        scope: Cluster
+  matchConditions:
+    - name: development-only
+      expression: "object.metadata.name == 'development'"
+  validations:
+    - expression: >-
+        has(object.metadata.labels) &&
+        'pod-security.kubernetes.io/enforce' in object.metadata.labels &&
+        object.metadata.labels['pod-security.kubernetes.io/enforce'] == 'restricted'
+      message: The development namespace must enforce the restricted Pod Security level.
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: beamray-dev-namespace
+  annotations:
+    argocd.argoproj.io/sync-wave: "-8"
+spec:
+  policyName: beamray-dev-namespace
+  validationActions:
+    - Deny

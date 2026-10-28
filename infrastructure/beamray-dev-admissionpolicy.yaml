@@ -33,6 +33,11 @@ spec:
     - expression: "!has(object.spec.ports) || object.spec.ports.all(port, !has(port.nodePort))"
       message: Service nodePort fields are forbidden in development.
       reason: Forbidden
+    - expression: >-
+        !has(object.metadata.annotations) ||
+        !object.metadata.annotations.exists(k, k.startsWith('tailscale.com/'))
+      message: Tailscale Service annotations are forbidden in development; use a tailscale Ingress.
+      reason: Forbidden
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
@@ -47,7 +52,7 @@ spec:
   matchResources:
     namespaceSelector:
       matchLabels:
-        beamray.dev/owner: beamray-dev
+        kubernetes.io/metadata.name: development
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
@@ -72,6 +77,11 @@ spec:
     - expression: "!has(object.metadata.annotations) || !('tailscale.com/funnel' in object.metadata.annotations)"
       message: Tailscale Funnel is forbidden in development.
       reason: Forbidden
+    - expression: >-
+        !has(object.metadata.annotations) ||
+        !['tailscale.com/tags', 'tailscale.com/proxy-group', 'tailscale.com/proxy-class'].exists(k, k in object.metadata.annotations)
+      message: Choosing Tailscale tags, proxy groups or proxy classes is forbidden in development.
+      reason: Forbidden
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
@@ -86,4 +96,4 @@ spec:
   matchResources:
     namespaceSelector:
       matchLabels:
-        beamray.dev/owner: beamray-dev
+        kubernetes.io/metadata.name: development
