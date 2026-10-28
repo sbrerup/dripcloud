@@ -169,6 +169,9 @@ metadata:
   name: dripcraft-portal
   labels:
     app.kubernetes.io/name: dripcraft-portal
+  annotations:
+    # Admin UI: only the owner may reach it (see the tailnet policy).
+    tailscale.com/tags: tag:k8s-admin
 spec:
   ingressClassName: tailscale
   tls:

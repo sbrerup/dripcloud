@@ -5,6 +5,9 @@ metadata:
   labels:
     app.kubernetes.io/name: crafty
     app.kubernetes.io/component: panel
+  annotations:
+    # Admin UI: only the owner may reach it (see the tailnet policy).
+    tailscale.com/tags: tag:k8s-admin
 spec:
   ingressClassName: tailscale
   tls:
