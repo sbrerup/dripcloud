@@ -40,6 +40,8 @@ metadata:
   namespace: kube-system
   annotations:
     argocd.argoproj.io/sync-wave: "0"
+    # Removing this file must not delete cluster DNS.
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
 data:
   Corefile: |
     turtle-vector.ts.net:53 {

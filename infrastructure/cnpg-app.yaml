@@ -3,8 +3,8 @@ kind: Application
 metadata:
   name: cnpg-system
   namespace: argocd
-  finalizers:
-    - resources-finalizer.argocd.argoproj.io
+  # No resources-finalizer: deleting this Application must not delete the CRDs
+  # and, with them, every database Cluster in the cluster.
 spec:
   project: default
   source:
