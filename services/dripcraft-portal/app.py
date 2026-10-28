@@ -5,6 +5,7 @@ import hmac
 import json
 import os
 import re
+import secrets
 import ssl
 import time
 import traceback
@@ -42,6 +43,9 @@ SECURITY_HEADERS = {
 class PortalError(Exception):
     status = 500
     code = "PORTAL_ERROR"
+    # What clients see; None means the message itself is safe to return.
+    # Details are only ever logged.
+    public_message: str | None = None
 
     def __init__(
         self,
@@ -50,6 +54,7 @@ class PortalError(Exception):
         details: Any = None,
         status: int | None = None,
         code: str | None = None,
+        public_message: str | None = None,
     ):
         super().__init__(message)
         self.details = details
@@ -57,10 +62,14 @@ class PortalError(Exception):
             self.status = status
         if code is not None:
             self.code = code
+        if public_message is not None:
+            self.public_message = public_message
 
 
 class UpstreamError(PortalError):
     code = "UPSTREAM_ERROR"
+    # Upstream messages carry internal URLs and response bodies.
+    public_message = "Upstream request failed."
 
 
 class ValidationError(PortalError):
@@ -213,6 +222,7 @@ class Config:
     crafty_username: str | None
     crafty_password: str | None
     crafty_tls_verify: bool
+    crafty_ca_file: str | None
     tailnet_domain: str
     port_range_start: int
     port_range_end: int
@@ -239,6 +249,7 @@ class Config:
             crafty_username=os.getenv("CRAFTY_USERNAME") or None,
             crafty_password=os.getenv("CRAFTY_PASSWORD") or None,
             crafty_tls_verify=bool_env("CRAFTY_TLS_VERIFY", False),
+            crafty_ca_file=os.getenv("CRAFTY_CA_FILE") or None,
             tailnet_domain=os.getenv("TAILSCALE_DOMAIN", "").strip().strip("."),
             port_range_start=int_env("PORT_RANGE_START", 25565),
             port_range_end=int_env("PORT_RANGE_END", 25585),
@@ -260,9 +271,29 @@ class Config:
 
 
 class JsonHttpClient:
-    def __init__(self, tls_verify: bool = True, bearer_token: str | None = None):
+    def __init__(self, tls_verify: bool = True, bearer_token: str | None = None, ca_file: str | None = None):
         self.tls_verify = tls_verify
         self.bearer_token = bearer_token
+        self.ca_file = ca_file
+
+    def _context(self, url: str) -> ssl.SSLContext | None:
+        if not url.startswith("https://"):
+            return None
+        if self.ca_file:
+            # An explicit CA always means full verification, even with
+            # CRAFTY_TLS_VERIFY off.
+            try:
+                return ssl.create_default_context(cafile=self.ca_file)
+            except (OSError, ssl.SSLError) as exc:
+                raise PortalError(
+                    f"Could not load CA file {self.ca_file}: {exc}",
+                    status=503,
+                    code="CA_FILE_INVALID",
+                    public_message="Configured CA file could not be loaded.",
+                ) from exc
+        if self.tls_verify:
+            return None
+        return ssl._create_unverified_context()
 
     def request(
         self,
@@ -285,9 +316,7 @@ class JsonHttpClient:
         if self.bearer_token:
             request_headers["Authorization"] = f"Bearer {self.bearer_token}"
 
-        context = None
-        if url.startswith("https://") and not self.tls_verify:
-            context = ssl._create_unverified_context()
+        context = self._context(url)
 
         request = urllib.request.Request(
             url,
@@ -322,7 +351,7 @@ class JsonHttpClient:
 class CraftyClient:
     def __init__(self, config: Config):
         self.config = config
-        self.client = JsonHttpClient(config.crafty_tls_verify, config.crafty_api_token)
+        self.client = JsonHttpClient(config.crafty_tls_verify, config.crafty_api_token, config.crafty_ca_file)
         self.session_token: str | None = None
         self.session_token_at = 0.0
 
@@ -353,7 +382,7 @@ class CraftyClient:
         token = self._token()
         if not token:
             raise PortalError("Crafty credentials are not configured.", status=503)
-        client = JsonHttpClient(self.config.crafty_tls_verify, token)
+        client = JsonHttpClient(self.config.crafty_tls_verify, token, self.config.crafty_ca_file)
         return client.request(method, f"{self.config.crafty_base_url}{path}", body=body)
 
     def list_servers(self) -> list[dict[str, Any]]:
@@ -468,9 +497,15 @@ class KubernetesClient:
         return self.token_path.exists()
 
     def _context(self) -> ssl.SSLContext:
-        if self.ca_path.exists():
-            return ssl.create_default_context(cafile=str(self.ca_path))
-        return ssl._create_unverified_context()
+        # Never talk to the API server unverified; it receives the SA token.
+        if not self.ca_path.is_file():
+            raise PortalError(
+                f"Kubernetes CA certificate {self.ca_path} is missing.",
+                status=503,
+                code="KUBERNETES_CA_MISSING",
+                public_message="Kubernetes CA certificate is not available.",
+            )
+        return ssl.create_default_context(cafile=str(self.ca_path))
 
     def request(
         self,
@@ -498,8 +533,9 @@ class KubernetesClient:
             headers=headers,
             method=method.upper(),
         )
+        context = self._context()
         try:
-            with urllib.request.urlopen(request, timeout=20, context=self._context()) as response:
+            with urllib.request.urlopen(request, timeout=20, context=context) as response:
                 raw = response.read()
                 if not raw:
                     return None
@@ -516,9 +552,16 @@ class KubernetesClient:
                 f"Kubernetes API {method.upper()} {path} failed with HTTP {exc.code}.",
                 details=parsed,
                 status=502,
+                code="KUBERNETES_ERROR",
+                public_message="Kubernetes API request failed.",
             ) from exc
         except urllib.error.URLError as exc:
-            raise UpstreamError(f"Kubernetes API request failed: {exc.reason}", status=502) from exc
+            raise UpstreamError(
+                f"Kubernetes API request failed: {exc.reason}",
+                status=502,
+                code="KUBERNETES_ERROR",
+                public_message="Kubernetes API request failed.",
+            ) from exc
 
     def list_managed_services(self) -> list[dict[str, Any]]:
         selector = urllib.parse.urlencode({"labelSelector": f"app.kubernetes.io/managed-by={MANAGED_BY}"})
@@ -862,7 +905,8 @@ class App:
                 },
             )
         except UpstreamError as exc:
-            warnings.append(f"Created server, but could not patch autostart settings: {exc}")
+            log_json({"level": "warning", "serverId": server_id, "message": str(exc), "details": exc.details})
+            warnings.append(f"Created server, but could not patch autostart settings ({exc.code}).")
         service = self.kube.create_or_update_service(
             server_id=server_id,
             server_name=server_name,
@@ -879,7 +923,8 @@ class App:
                 self.crafty.start_server(server_id)
                 started = True
             except UpstreamError as exc:
-                warnings.append(f"Created server and exposure, but could not start server: {exc}")
+                log_json({"level": "warning", "serverId": server_id, "message": str(exc), "details": exc.details})
+                warnings.append(f"Created server and exposure, but could not start server ({exc.code}).")
         return {
             "serverId": server_id,
             "name": server_name,
@@ -1104,17 +1149,19 @@ class PortalHandler(BaseHTTPRequestHandler):
                 return
             self.serve_static(path)
         except PortalError as exc:
-            print(
-                json.dumps(
-                    {
-                        "level": "error",
-                        "path": self.path,
-                        "error": exc.code,
-                        "message": str(exc),
-                        "details": exc.details,
-                    },
-                    separators=(",", ":"),
-                )
+            # Full message and upstream details stay in the log; clients get
+            # the public message plus a reference to find the log line.
+            ref = secrets.token_hex(4)
+            log_json(
+                {
+                    "level": "error" if exc.status >= 500 else "warning",
+                    "ref": ref,
+                    "method": method,
+                    "path": self.path,
+                    "error": exc.code,
+                    "message": str(exc),
+                    "details": exc.details,
+                }
             )
             json_response(
                 self,
@@ -1122,11 +1169,13 @@ class PortalHandler(BaseHTTPRequestHandler):
                 {
                     "status": "error",
                     "error": exc.code,
-                    "message": str(exc),
-                    "details": exc.details,
+                    "message": exc.public_message or str(exc),
+                    "ref": ref,
                 },
             )
-        except Exception as exc:
+        except Exception:
+            ref = secrets.token_hex(4)
+            log_json({"level": "error", "ref": ref, "method": method, "path": self.path, "error": "UNHANDLED_ERROR"})
             traceback.print_exc()
             json_response(
                 self,
@@ -1134,7 +1183,8 @@ class PortalHandler(BaseHTTPRequestHandler):
                 {
                     "status": "error",
                     "error": "UNHANDLED_ERROR",
-                    "message": str(exc),
+                    "message": "Internal server error.",
+                    "ref": ref,
                 },
             )
 
@@ -1266,6 +1316,8 @@ def run() -> None:
                 "message": "PORTAL_TOKEN is not set; every /api/* request will return 503 until it is configured.",
             }
         )
+    if config.crafty_ca_file and not Path(config.crafty_ca_file).is_file():
+        log_json({"level": "warning", "message": f"CRAFTY_CA_FILE {config.crafty_ca_file} does not exist."})
     PortalHandler.app = App(config)
     PortalHandler.static_root = Path(__file__).parent / "static"
     server = ThreadingHTTPServer((config.bind_host, config.bind_port), PortalHandler)

@@ -43,6 +43,16 @@ The portal uses these defaults:
 Set `TAILSCALE_DOMAIN` in the `dripcraft-portal-config` ConfigMap if you want
 the UI to show full MagicDNS names.
 
+To verify Crafty's certificate without trusting the system CAs, mount its CA
+certificate (PEM) into the pod and set `CRAFTY_CA_FILE` to that path. When set,
+the portal always verifies Crafty against that CA, including the hostname in
+`CRAFTY_BASE_URL`, regardless of `CRAFTY_TLS_VERIFY`. Without it,
+`CRAFTY_TLS_VERIFY=true` uses the system CAs and `false` skips verification.
+
+Error responses carry a generic message, an `error` code and a `ref`; the
+upstream URL and response body are only written to the portal log, on the line
+with the same `ref`.
+
 ### Exposable ports
 
 `EXPOSE_ALLOWED_PORTS` limits which Crafty pod ports the portal will publish as

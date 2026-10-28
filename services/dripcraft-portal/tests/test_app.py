@@ -1,6 +1,8 @@
 import http.client
 import json
 import os
+import ssl
+import tempfile
 import threading
 import unittest
 from http.server import ThreadingHTTPServer
@@ -27,6 +29,14 @@ TOKEN = "correct-horse-battery-staple"
 SERVER_ID = "3f0c1d9e-8a4b-4c2d-9e1f-0a1b2c3d4e5f"
 OTHER_SERVER_ID = "9b7e6d5c-4a3b-4c2d-8e1f-123456789abc"
 JAR_CACHE = {"mc_java_servers": {"types": {"paper": {"versions": {"1.21.8": {}}}}}}
+
+
+def system_ca_file() -> str | None:
+    paths = ssl.get_default_verify_paths()
+    for candidate in (paths.cafile, paths.openssl_cafile, "/etc/ssl/certs/ca-certificates.crt"):
+        if candidate and Path(candidate).is_file():
+            return candidate
+    return None
 
 
 def make_config(**env: str | None) -> portal.Config:
@@ -627,6 +637,131 @@ class ConfiguredExposurePortTest(ExposurePortTest):
             with self.subTest(port=port):
                 response, payload = self.expose(port)
                 self.assertEqual(response.status, 400)
+
+
+def raise_upstream(*args, **kwargs):
+    raise portal.UpstreamError(
+        "GET https://crafty-headless:8443/api/v2/servers failed with HTTP 500.",
+        details={"trace": "internal-secret-detail"},
+        status=502,
+    )
+
+
+class ErrorDisclosureTest(PortalServerTestCase):
+    def test_upstream_details_are_logged_not_returned(self):
+        self.app.crafty.list_servers = raise_upstream
+        response, payload = self.request("GET", "/api/servers")
+        self.assertEqual(response.status, 502)
+        self.assertEqual(payload["error"], "UPSTREAM_ERROR")
+        self.assertEqual(payload["message"], "Upstream request failed.")
+        self.assertRegex(payload["ref"], r"^[0-9a-f]{8}$")
+        self.assertNotIn("details", payload)
+        self.assertNotIn("crafty-headless", json.dumps(payload))
+        self.assertNotIn("internal-secret-detail", json.dumps(payload))
+        logged = self.logged.call_args.args[0]
+        self.assertEqual(logged["ref"], payload["ref"])
+        self.assertIn("crafty-headless", logged["message"])
+        self.assertEqual(logged["details"], {"trace": "internal-secret-detail"})
+
+    def test_kubernetes_errors_use_their_own_code(self):
+        def fail(*args, **kwargs):
+            raise portal.UpstreamError(
+                "Kubernetes API GET /api/v1/namespaces/dripcraft/services failed with HTTP 403.",
+                status=502,
+                code="KUBERNETES_ERROR",
+                public_message="Kubernetes API request failed.",
+            )
+
+        self.app.kube.list_managed_services = fail
+        response, payload = self.request("GET", "/api/servers")
+        self.assertEqual(response.status, 502)
+        self.assertEqual(payload["error"], "KUBERNETES_ERROR")
+        self.assertNotIn("/api/v1/namespaces", payload["message"])
+
+    def test_unhandled_errors_are_generic(self):
+        def crash():
+            raise RuntimeError("https://crafty-headless:8443 exploded")
+
+        self.app.crafty.list_servers = crash
+        with mock.patch.object(portal.traceback, "print_exc"):
+            response, payload = self.request("GET", "/api/servers")
+        self.assertEqual(response.status, 500)
+        self.assertEqual(payload["error"], "UNHANDLED_ERROR")
+        self.assertEqual(payload["message"], "Internal server error.")
+        self.assertNotIn("crafty-headless", json.dumps(payload))
+
+    def test_validation_messages_are_still_shown(self):
+        response, payload = self.request(
+            "POST",
+            "/api/exposures",
+            json_body={"serverId": SERVER_ID, "hostname": "sky", "port": 8443},
+        )
+        self.assertEqual(response.status, 400)
+        self.assertEqual(payload["message"], "Port 8443 is not allowed for Tailnet exposure.")
+
+    def test_create_warnings_do_not_include_upstream_urls(self):
+        app = portal.App(make_config(START_AFTER_CREATE_DELAY_SECONDS="0"))
+        app.crafty = FakeCrafty()
+        app.crafty.patch_server_config = raise_upstream
+        app.crafty.start_server = raise_upstream
+        app.kube = FakeKube()
+        with mock.patch.object(portal, "log_json"):
+            result = app.create_server({"name": "Sky", "version": "1.21.8", "agreeToEula": True})
+        self.assertEqual(result["serverId"], OTHER_SERVER_ID)
+        self.assertEqual(len(result["warnings"]), 2)
+        for warning in result["warnings"]:
+            self.assertIn("UPSTREAM_ERROR", warning)
+            self.assertNotIn("crafty-headless", warning)
+
+
+class TlsTest(unittest.TestCase):
+    def test_kubernetes_client_requires_ca(self):
+        with tempfile.TemporaryDirectory() as directory:
+            kube = portal.KubernetesClient("dripcraft")
+            kube.token_path = Path(directory) / "token"
+            kube.token_path.write_text("sa-token", encoding="utf-8")
+            kube.ca_path = Path(directory) / "ca.crt"
+            with mock.patch.object(portal.urllib.request, "urlopen") as urlopen:
+                with self.assertRaises(portal.PortalError) as caught:
+                    kube.request("GET", "/api/v1/namespaces/dripcraft/services")
+            urlopen.assert_not_called()
+        self.assertEqual(caught.exception.code, "KUBERNETES_CA_MISSING")
+        self.assertEqual(caught.exception.status, 503)
+
+    def test_kubernetes_client_verifies_with_ca(self):
+        ca_file = system_ca_file()
+        if not ca_file:
+            self.skipTest("no system CA bundle available")
+        kube = portal.KubernetesClient("dripcraft")
+        kube.ca_path = Path(ca_file)
+        context = kube._context()
+        self.assertEqual(context.verify_mode, ssl.CERT_REQUIRED)
+        self.assertTrue(context.check_hostname)
+
+    def test_crafty_tls_verify_behaviour_is_unchanged(self):
+        unverified = portal.JsonHttpClient(tls_verify=False)._context("https://crafty-headless:8443/api")
+        self.assertEqual(unverified.verify_mode, ssl.CERT_NONE)
+        self.assertIsNone(portal.JsonHttpClient(tls_verify=True)._context("https://crafty-headless:8443/api"))
+        self.assertIsNone(portal.JsonHttpClient(tls_verify=False)._context("http://crafty-headless:8000/api"))
+        self.assertFalse(make_config().crafty_tls_verify)
+
+    def test_crafty_ca_file_forces_verification(self):
+        ca_file = system_ca_file()
+        if not ca_file:
+            self.skipTest("no system CA bundle available")
+        config = make_config(CRAFTY_TLS_VERIFY="false", CRAFTY_CA_FILE=ca_file)
+        self.assertEqual(config.crafty_ca_file, ca_file)
+        client = portal.CraftyClient(config).client
+        context = client._context("https://crafty-headless:8443/api")
+        self.assertEqual(context.verify_mode, ssl.CERT_REQUIRED)
+        self.assertTrue(context.check_hostname)
+
+    def test_missing_crafty_ca_file_fails_instead_of_skipping_verification(self):
+        client = portal.JsonHttpClient(tls_verify=False, ca_file="/nonexistent/crafty-ca.pem")
+        with self.assertRaises(portal.PortalError) as caught:
+            client.request("GET", "https://crafty-headless:8443/api/v2/servers")
+        self.assertEqual(caught.exception.code, "CA_FILE_INVALID")
+        self.assertNotIn("/nonexistent", caught.exception.public_message)
 
 
 if __name__ == "__main__":

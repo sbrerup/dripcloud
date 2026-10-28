@@ -73,7 +73,9 @@ async function api(path, options = {}) {
       showAuth("The server has no PORTAL_TOKEN configured, so the API is disabled.");
     }
     const message = payload.message || payload.error || `HTTP ${response.status}`;
-    throw new Error(message);
+    // Server errors carry a ref that matches the portal's log line.
+    const serverError = response.status >= 500 && payload.ref;
+    throw new Error(serverError ? `${message} (${payload.error}, ref ${payload.ref})` : message);
   }
   return payload.data;
 }
