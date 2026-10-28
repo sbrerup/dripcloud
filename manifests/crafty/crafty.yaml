@@ -183,15 +183,3 @@ spec:
         resources:
           requests:
             storage: 100Gi
----
-apiVersion: policy/v1
-kind: PodDisruptionBudget
-metadata:
-  name: crafty
-  labels:
-    app.kubernetes.io/name: crafty
-spec:
-  minAvailable: 1
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: crafty
