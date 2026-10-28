@@ -5,3 +5,7 @@ metadata:
 spec:
   blocks:
     - cidr: 10.1.2.250/32
+  # Only dripcraft Services may claim the LAN address.
+  serviceSelector:
+    matchLabels:
+      io.kubernetes.service.namespace: dripcraft
