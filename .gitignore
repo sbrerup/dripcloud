@@ -6,3 +6,7 @@ charts
 secrets.yaml
 __pycache__/
 *.pyc
+kubeconfig
+talosconfig
+*.pem
+*.key
