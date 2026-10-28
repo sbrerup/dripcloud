@@ -133,10 +133,8 @@ metadata:
     argocd.argoproj.io/sync-wave: "-8"
 spec:
   policyName: beamray-dev-argocd-objects
-  # Warn first; switch to Deny once the live Applications pass cleanly.
   validationActions:
-    - Warn
-    - Audit
+    - Deny
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
