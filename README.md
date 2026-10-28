@@ -17,11 +17,22 @@ See [Firecrawl operations](manifests/firecrawl/README.md),
 ## BeamRay development
 
 `apps/beamray-dev-workloads.yaml` is the parent Application for the private
-BeamRay development environment. It creates the `development` namespace and
-applies the app-of-apps manifests from the separate `beamray-dev` repository.
-All BeamRay child Applications target that namespace with namespace creation
-disabled. Namespace-level workload guardrails live with the parent render;
-cluster-scoped admission policies remain in this repository.
+BeamRay development environment. It applies the app-of-apps manifests from the
+separate `beamray-dev` repository. All BeamRay child Applications target the
+`development` namespace with namespace creation disabled. Namespace-level
+workload guardrails live with the parent render.
+
+This repository owns everything that bounds what the `beamray-dev` repository
+can do (`infrastructure/beamray-dev-guardrails.yaml` and
+`infrastructure/beamray-dev-admissionpolicy.yaml`):
+
+- the `development` Namespace and its restricted Pod Security labels
+- the `beamray-dev-parent` AppProject: namespaced kinds only, in `argocd` and
+  `development`
+- admission policies that only let the parent manage child Applications in
+  the `beamray-dev` project and the `beamray-dev` AppProject itself, within
+  fixed source, destination and kind limits, and that limit Service/Ingress
+  exposure in `development`
 
 ## DripCraft
 
