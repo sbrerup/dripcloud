@@ -21,11 +21,13 @@
             <span aria-hidden="true">&#8635;</span>
           </button>
           <a class="button secondary" id="craftyLink" href="#" rel="noreferrer">Crafty</a>
+          <button class="button secondary hidden" id="lockButton" type="button" title="Forget the portal token for this tab">Lock</button>
         </div>
       </header>
 
       <section class="notice hidden" id="authPanel">
         <label for="portalToken">Portal token</label>
+        <p id="authMessage">Enter the portal token to continue.</p>
         <div class="inline">
           <input id="portalToken" type="password" autocomplete="current-password">
           <button class="button" id="saveTokenButton" type="button">Unlock</button>

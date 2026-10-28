@@ -1,16 +1,121 @@
+import http.client
+import json
+import os
+import threading
 import unittest
+from http.server import ThreadingHTTPServer
+from pathlib import Path
+from unittest import mock
 
+import app as portal
 from app import (
     build_service_manifest,
     find_created_server,
     jar_options,
     next_free_port,
+    origin_matches_host,
     resolve_jar_selection,
     sanitize_hostname,
     sanitize_service_name,
     unique_hostname,
     used_ports,
 )
+
+
+STATIC_ROOT = Path(portal.__file__).resolve().parent / "static"
+TOKEN = "correct-horse-battery-staple"
+SERVER_ID = "3f0c1d9e-8a4b-4c2d-9e1f-0a1b2c3d4e5f"
+
+
+def make_config(**env: str | None) -> portal.Config:
+    values = {
+        "POD_NAMESPACE": "dripcraft",
+        "PORTAL_TOKEN": TOKEN,
+        "CRAFTY_API_TOKEN": "crafty-token",
+        **env,
+    }
+    values = {key: value for key, value in values.items() if value is not None}
+    with mock.patch.dict(os.environ, values, clear=True):
+        return portal.Config.from_env()
+
+
+class FakeCrafty:
+    def __init__(self):
+        self.calls = []
+
+    def list_servers(self):
+        self.calls.append(("list",))
+        return [{"id": SERVER_ID, "name": "Skyblock", "port": 25566, "raw": {}}]
+
+    def delete_server(self, server_id, remove_files):
+        self.calls.append(("delete", server_id, remove_files))
+
+
+class FakeKube:
+    available = True
+
+    def __init__(self):
+        self.calls = []
+
+    def list_managed_services(self):
+        return []
+
+    def create_or_update_service(self, **kwargs):
+        self.calls.append(("upsert", kwargs))
+        return build_service_manifest(
+            name=sanitize_service_name(kwargs["hostname"]),
+            namespace="dripcraft",
+            **kwargs,
+        )
+
+    def delete_service_for_server(self, server_id):
+        self.calls.append(("delete", server_id))
+        return True
+
+
+class PortalServerTestCase(unittest.TestCase):
+    env: dict[str, str | None] = {}
+
+    def setUp(self):
+        self.app = portal.App(make_config(**self.env))
+        self.app.crafty = FakeCrafty()
+        self.app.kube = FakeKube()
+        handler = type(
+            "TestHandler",
+            (portal.PortalHandler,),
+            {"app": self.app, "static_root": STATIC_ROOT, "log_message": lambda *args: None},
+        )
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        threading.Thread(target=self.server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True).start()
+        self.addCleanup(self.server.server_close)
+        self.addCleanup(self.server.shutdown)
+        log_patch = mock.patch.object(portal, "log_json")
+        self.logged = log_patch.start()
+        self.addCleanup(log_patch.stop)
+
+    @property
+    def origin(self) -> str:
+        return f"http://127.0.0.1:{self.server.server_port}"
+
+    def request(self, method, path, *, json_body=None, body=None, headers=None, token=TOKEN):
+        request_headers = {}
+        if token is not None:
+            request_headers["X-Portal-Token"] = token
+        if json_body is not None:
+            body = json.dumps(json_body).encode("utf-8")
+            request_headers["Content-Type"] = "application/json"
+        request_headers.update(headers or {})
+        connection = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=10)
+        try:
+            connection.request(method, path, body=body, headers=request_headers)
+            response = connection.getresponse()
+            raw = response.read()
+        finally:
+            connection.close()
+        payload = raw
+        if (response.getheader("Content-Type") or "").startswith("application/json"):
+            payload = json.loads(raw)
+        return response, payload
 
 
 class PortalHelpersTest(unittest.TestCase):
@@ -112,6 +217,232 @@ class PortalHelpersTest(unittest.TestCase):
         self.assertEqual(manifest["spec"]["ports"][0]["port"], 25565)
         self.assertEqual(manifest["spec"]["ports"][0]["targetPort"], 25566)
         self.assertEqual(manifest["metadata"]["annotations"]["tailscale.com/hostname"], "skyblock")
+
+    def test_origin_matches_host(self):
+        self.assertTrue(origin_matches_host("https://dripcraft.tail1234.ts.net", "dripcraft.tail1234.ts.net"))
+        self.assertTrue(origin_matches_host("https://dripcraft.tail1234.ts.net", "Dripcraft.tail1234.ts.net:443"))
+        self.assertTrue(origin_matches_host("http://localhost:8080", "localhost:8080"))
+        self.assertFalse(origin_matches_host("https://evil.example", "dripcraft.tail1234.ts.net"))
+        self.assertFalse(origin_matches_host("http://localhost:8081", "localhost:8080"))
+        self.assertFalse(origin_matches_host("null", "localhost:8080"))
+        self.assertFalse(origin_matches_host("https://dripcraft", ""))
+
+
+class FailClosedAuthTest(PortalServerTestCase):
+    env = {"PORTAL_TOKEN": None}
+
+    def test_api_returns_503_when_token_unset(self):
+        for method, path in (
+            ("GET", "/api/config"),
+            ("GET", "/api/servers"),
+            ("POST", "/api/sync"),
+            ("DELETE", f"/api/servers/{SERVER_ID}?files=true"),
+        ):
+            with self.subTest(method=method, path=path):
+                response, payload = self.request(method, path, token=None)
+                self.assertEqual(response.status, 503)
+                self.assertEqual(payload["error"], "PORTAL_TOKEN_NOT_CONFIGURED")
+                self.assertIn("portal token not configured", payload["message"].lower())
+        self.assertEqual(self.app.crafty.calls, [])
+        self.assertEqual(self.app.kube.calls, [])
+
+    def test_any_supplied_token_is_rejected_when_unset(self):
+        response, payload = self.request("GET", "/api/servers", token="")
+        self.assertEqual(response.status, 503)
+        response, payload = self.request("GET", "/api/servers", token="guess")
+        self.assertEqual(response.status, 503)
+
+    def test_health_and_static_still_work(self):
+        response, payload = self.request("GET", "/healthz", token=None)
+        self.assertEqual(response.status, 200)
+        self.assertEqual(payload, {"status": "ok"})
+        response, body = self.request("GET", "/", token=None)
+        self.assertEqual(response.status, 200)
+        self.assertIn(b"Dripcraft", body)
+        response, body = self.request("GET", "/static/app.js", token=None)
+        self.assertEqual(response.status, 200)
+        self.assertTrue(response.getheader("Content-Type").startswith("application/javascript"))
+
+
+class BlankTokenTest(PortalServerTestCase):
+    env = {"PORTAL_TOKEN": "   "}
+
+    def test_blank_token_counts_as_unset(self):
+        self.assertIsNone(self.app.config.portal_token)
+        response, payload = self.request("GET", "/api/servers", token="   ")
+        self.assertEqual(response.status, 503)
+
+
+class TokenAuthTest(PortalServerTestCase):
+    def test_missing_token_is_rejected(self):
+        response, payload = self.request("GET", "/api/servers", token=None)
+        self.assertEqual(response.status, 401)
+        self.assertEqual(payload["error"], "UNAUTHORIZED")
+
+    def test_wrong_token_is_rejected(self):
+        for token in ("", "wrong", TOKEN + "x", TOKEN[:-1], "é" * 4):
+            with self.subTest(token=token):
+                response, payload = self.request("GET", "/api/servers", token=token)
+                self.assertEqual(response.status, 401)
+        self.assertEqual(self.app.crafty.calls, [])
+
+    def test_config_requires_token(self):
+        response, payload = self.request("GET", "/api/config", token=None)
+        self.assertEqual(response.status, 401)
+
+    def test_right_token_is_accepted(self):
+        response, payload = self.request("GET", "/api/servers")
+        self.assertEqual(response.status, 200)
+        self.assertEqual(payload["data"]["servers"][0]["id"], SERVER_ID)
+        response, payload = self.request("GET", "/api/config")
+        self.assertEqual(response.status, 200)
+        self.assertTrue(payload["data"]["authRequired"])
+
+    def test_token_is_compared_in_constant_time(self):
+        with mock.patch.object(portal.hmac, "compare_digest", wraps=portal.hmac.compare_digest) as compare:
+            response, payload = self.request("GET", "/api/servers")
+        self.assertEqual(response.status, 200)
+        compare.assert_called_once_with(TOKEN.encode("utf-8"), TOKEN.encode("utf-8"))
+
+
+class CrossSiteProtectionTest(PortalServerTestCase):
+    def test_foreign_origin_is_rejected(self):
+        for origin in ("https://evil.example", "null", "http://127.0.0.1:1"):
+            with self.subTest(origin=origin):
+                response, payload = self.request("POST", "/api/sync", headers={"Origin": origin})
+                self.assertEqual(response.status, 403)
+                self.assertEqual(payload["error"], "CROSS_ORIGIN_REJECTED")
+        response, payload = self.request(
+            "DELETE",
+            f"/api/servers/{SERVER_ID}?files=true",
+            headers={"Origin": "https://evil.example"},
+        )
+        self.assertEqual(response.status, 403)
+        self.assertEqual(self.app.crafty.calls, [])
+
+    def test_same_origin_is_allowed(self):
+        response, payload = self.request("POST", "/api/sync", headers={"Origin": self.origin})
+        self.assertEqual(response.status, 200)
+
+    def test_missing_origin_is_allowed_with_token(self):
+        response, payload = self.request("POST", "/api/sync")
+        self.assertEqual(response.status, 200)
+
+    def test_cross_site_fetch_is_rejected(self):
+        response, payload = self.request(
+            "POST",
+            "/api/sync",
+            headers={"Origin": self.origin, "Sec-Fetch-Site": "cross-site"},
+        )
+        self.assertEqual(response.status, 403)
+        self.assertEqual(payload["error"], "CROSS_SITE_REJECTED")
+        for site in ("same-origin", "none"):
+            with self.subTest(site=site):
+                response, payload = self.request("POST", "/api/sync", headers={"Sec-Fetch-Site": site})
+                self.assertEqual(response.status, 200)
+
+    def test_reads_are_not_origin_checked(self):
+        response, payload = self.request("GET", "/api/servers", headers={"Origin": "https://evil.example"})
+        self.assertEqual(response.status, 200)
+
+    def test_body_requires_json_content_type(self):
+        body = json.dumps({"serverId": SERVER_ID, "port": 25566, "hostname": "sky"}).encode("utf-8")
+        for content_type in (None, "text/plain", "application/x-www-form-urlencoded", "multipart/form-data"):
+            with self.subTest(content_type=content_type):
+                headers = {"Content-Type": content_type} if content_type else {}
+                response, payload = self.request("POST", "/api/exposures", body=body, headers=headers)
+                self.assertEqual(response.status, 415)
+                self.assertEqual(payload["error"], "UNSUPPORTED_MEDIA_TYPE")
+        self.assertEqual(self.app.kube.calls, [])
+        response, payload = self.request(
+            "POST",
+            "/api/exposures",
+            body=body,
+            headers={"Content-Type": "application/json; charset=utf-8"},
+        )
+        self.assertEqual(response.status, 201)
+
+    def test_non_api_writes_are_not_allowed(self):
+        response, payload = self.request("POST", "/", json_body={})
+        self.assertEqual(response.status, 405)
+
+
+class BodyLimitTest(PortalServerTestCase):
+    def raw_request(self, method, path, headers):
+        connection = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=10)
+        try:
+            connection.putrequest(method, path)
+            for name, value in {"X-Portal-Token": TOKEN, **headers}.items():
+                connection.putheader(name, value)
+            connection.endheaders()
+            response = connection.getresponse()
+            return response, json.loads(response.read())
+        finally:
+            connection.close()
+
+    def test_oversized_body_is_rejected_before_reading(self):
+        response, payload = self.raw_request(
+            "POST",
+            "/api/exposures",
+            {"Content-Type": "application/json", "Content-Length": str(portal.MAX_BODY_BYTES + 1)},
+        )
+        self.assertEqual(response.status, 413)
+        self.assertEqual(payload["error"], "PAYLOAD_TOO_LARGE")
+        self.assertEqual(self.app.kube.calls, [])
+
+    def test_body_at_limit_is_read(self):
+        body = json.dumps({"serverId": SERVER_ID, "port": 25566, "hostname": "sky", "pad": ""})
+        body = body.replace('"pad": ""', '"pad": "' + "x" * (portal.MAX_BODY_BYTES - len(body)) + '"')
+        self.assertEqual(len(body), portal.MAX_BODY_BYTES)
+        response, payload = self.request(
+            "POST",
+            "/api/exposures",
+            body=body.encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        self.assertEqual(response.status, 201)
+
+    def test_invalid_or_chunked_length_is_rejected(self):
+        response, payload = self.raw_request("POST", "/api/sync", {"Content-Length": "1_0"})
+        self.assertEqual(response.status, 400)
+        response, payload = self.raw_request("POST", "/api/sync", {"Content-Length": "-1"})
+        self.assertEqual(response.status, 400)
+        response, payload = self.raw_request("POST", "/api/sync", {"Transfer-Encoding": "chunked"})
+        self.assertEqual(response.status, 411)
+
+
+class SecurityHeadersTest(PortalServerTestCase):
+    def assert_security_headers(self, response):
+        csp = response.getheader("Content-Security-Policy") or ""
+        self.assertIn("default-src 'self'", csp)
+        self.assertIn("frame-ancestors 'none'", csp)
+        self.assertEqual(response.getheader("X-Content-Type-Options"), "nosniff")
+        self.assertEqual(response.getheader("Referrer-Policy"), "no-referrer")
+        self.assertEqual(response.getheader("X-Frame-Options"), "DENY")
+
+    def test_headers_on_every_kind_of_response(self):
+        for method, path, token in (
+            ("GET", "/", None),
+            ("GET", "/static/styles.css", None),
+            ("GET", "/healthz", None),
+            ("GET", "/api/servers", TOKEN),
+            ("GET", "/api/servers", None),
+            ("GET", "/api/nope", TOKEN),
+            ("OPTIONS", "/api/servers", None),
+        ):
+            with self.subTest(method=method, path=path, token=bool(token)):
+                response, _ = self.request(method, path, token=token)
+                self.assert_security_headers(response)
+
+    def test_api_responses_are_not_cached(self):
+        response, _ = self.request("GET", "/api/servers")
+        self.assertEqual(response.getheader("Cache-Control"), "no-store")
+
+    def test_index_has_no_inline_script_or_style(self):
+        html = (STATIC_ROOT / "index.html").read_text(encoding="utf-8")
+        self.assertNotIn("<style", html)
+        self.assertNotIn("style=", html)
+        self.assertNotRegex(html, r"<script(?![^>]*\bsrc=)")
 
 
 if __name__ == "__main__":

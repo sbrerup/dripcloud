@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import hmac
 import json
 import os
 import re
@@ -23,17 +24,34 @@ SERVER_ID_LABEL = "dripcloud.io/crafty-server-id"
 SERVER_HOSTNAME_LABEL = "dripcloud.io/hostname"
 SERVER_NAME_ANNOTATION = "dripcloud.io/crafty-server-name"
 TARGET_PORT_ANNOTATION = "dripcloud.io/target-port"
+MAX_BODY_BYTES = 64 * 1024
+STATE_CHANGING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+SECURITY_HEADERS = {
+    "Content-Security-Policy": "default-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+    "X-Frame-Options": "DENY",
+}
 
 
 class PortalError(Exception):
     status = 500
     code = "PORTAL_ERROR"
 
-    def __init__(self, message: str, *, details: Any = None, status: int | None = None):
+    def __init__(
+        self,
+        message: str,
+        *,
+        details: Any = None,
+        status: int | None = None,
+        code: str | None = None,
+    ):
         super().__init__(message)
         self.details = details
         if status is not None:
             self.status = status
+        if code is not None:
+            self.code = code
 
 
 class UpstreamError(PortalError):
@@ -191,7 +209,7 @@ class Config:
             default_minecraft_version=os.getenv("DEFAULT_MC_VERSION", ""),
             default_mem_min=int_env("DEFAULT_MEM_MIN", 1),
             default_mem_max=int_env("DEFAULT_MEM_MAX", 4),
-            portal_token=os.getenv("PORTAL_TOKEN") or None,
+            portal_token=(os.getenv("PORTAL_TOKEN") or "").strip() or None,
             auto_redirect=bool_env("AUTO_REDIRECT_TO_CRAFTY", True),
             start_after_create_delay_seconds=int_env("START_AFTER_CREATE_DELAY_SECONDS", 30),
         )
@@ -919,23 +937,62 @@ class App:
         }
 
 
+def log_json(payload: dict[str, Any]) -> None:
+    print(json.dumps(payload, separators=(",", ":"), default=str))
+
+
 def json_response(handler: BaseHTTPRequestHandler, status: int, payload: dict[str, Any]) -> None:
     body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json")
     handler.send_header("Content-Length", str(len(body)))
+    handler.send_header("Cache-Control", "no-store")
     handler.end_headers()
     handler.wfile.write(body)
 
 
+def request_body_length(handler: BaseHTTPRequestHandler) -> int:
+    # Only plain Content-Length bodies are read, so anything else is refused
+    # instead of being silently ignored.
+    if handler.headers.get("Transfer-Encoding"):
+        raise PortalError("Chunked request bodies are not supported.", status=411, code="LENGTH_REQUIRED")
+    raw = (handler.headers.get("Content-Length") or "0").strip()
+    if not re.fullmatch(r"[0-9]{1,12}", raw):
+        raise ValidationError("Content-Length must be a non-negative integer.")
+    length = int(raw)
+    if length > MAX_BODY_BYTES:
+        raise PortalError(
+            f"Request body must be at most {MAX_BODY_BYTES} bytes.",
+            status=413,
+            code="PAYLOAD_TOO_LARGE",
+        )
+    return length
+
+
+def origin_matches_host(origin: str, host: str) -> bool:
+    parsed_origin = urllib.parse.urlsplit(origin.strip())
+    parsed_host = urllib.parse.urlsplit(f"//{host.strip()}")
+    if parsed_origin.scheme not in {"http", "https"}:
+        return False
+    if not parsed_origin.hostname or not parsed_host.hostname:
+        return False
+    default_port = 443 if parsed_origin.scheme == "https" else 80
+    try:
+        origin_port = parsed_origin.port or default_port
+        host_port = parsed_host.port or default_port
+    except ValueError:
+        return False
+    return parsed_origin.hostname == parsed_host.hostname and origin_port == host_port
+
+
 def read_json(handler: BaseHTTPRequestHandler) -> dict[str, Any]:
-    content_length = int(handler.headers.get("Content-Length", "0"))
+    content_length = request_body_length(handler)
     if content_length <= 0:
         return {}
     raw = handler.rfile.read(content_length)
     try:
         parsed = json.loads(raw.decode("utf-8"))
-    except json.JSONDecodeError as exc:
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ValidationError("Request body must be valid JSON.") from exc
     if not isinstance(parsed, dict):
         raise ValidationError("Request body must be a JSON object.")
@@ -949,11 +1006,23 @@ class PortalHandler(BaseHTTPRequestHandler):
     def log_message(self, fmt: str, *args: Any) -> None:
         print(f"{self.address_string()} - {fmt % args}")
 
+    def end_headers(self) -> None:
+        # Covers every response, including BaseHTTPRequestHandler.send_error.
+        for name, value in SECURITY_HEADERS.items():
+            self.send_header(name, value)
+        super().end_headers()
+
     def do_GET(self) -> None:
         self.handle_request("GET")
 
     def do_POST(self) -> None:
         self.handle_request("POST")
+
+    def do_PUT(self) -> None:
+        self.handle_request("PUT")
+
+    def do_PATCH(self) -> None:
+        self.handle_request("PATCH")
 
     def do_DELETE(self) -> None:
         self.handle_request("DELETE")
@@ -964,9 +1033,14 @@ class PortalHandler(BaseHTTPRequestHandler):
             path = parsed.path
             query = urllib.parse.parse_qs(parsed.query)
             if path.startswith("/api/"):
-                self.require_token(path)
+                self.require_token()
+                if method in STATE_CHANGING_METHODS:
+                    self.require_same_origin()
+                self.require_acceptable_body(method)
                 self.handle_api(method, path, query)
                 return
+            if method != "GET":
+                raise PortalError("Method not allowed.", status=405, code="METHOD_NOT_ALLOWED")
             if path == "/healthz":
                 json_response(self, 200, {"status": "ok"})
                 return
@@ -1006,15 +1080,34 @@ class PortalHandler(BaseHTTPRequestHandler):
                 },
             )
 
-    def require_token(self, path: str) -> None:
-        if path == "/api/config":
-            return
+    def require_token(self) -> None:
+        # Fail closed: without a configured token the API is unusable, but
+        # /healthz and the static UI keep working so the pod stays Ready.
         expected = self.app.config.portal_token
         if not expected:
-            return
+            raise PortalError("Portal token not configured.", status=503, code="PORTAL_TOKEN_NOT_CONFIGURED")
         provided = self.headers.get("X-Portal-Token") or ""
-        if provided != expected:
-            raise PortalError("Portal token is required.", status=401)
+        if not hmac.compare_digest(provided.encode("utf-8"), expected.encode("utf-8")):
+            raise PortalError("Portal token is required.", status=401, code="UNAUTHORIZED")
+
+    def require_same_origin(self) -> None:
+        # Browsers always send these on cross-site requests; non-browser
+        # clients that omit them still need the portal token.
+        origin = self.headers.get("Origin")
+        if origin is not None and not origin_matches_host(origin, self.headers.get("Host") or ""):
+            raise PortalError("Cross-origin requests are not allowed.", status=403, code="CROSS_ORIGIN_REJECTED")
+        fetch_site = (self.headers.get("Sec-Fetch-Site") or "").strip().lower()
+        if fetch_site == "cross-site":
+            raise PortalError("Cross-site requests are not allowed.", status=403, code="CROSS_SITE_REJECTED")
+
+    def require_acceptable_body(self, method: str) -> None:
+        length = request_body_length(self)
+        if length and method in STATE_CHANGING_METHODS and self.headers.get_content_type() != "application/json":
+            raise PortalError(
+                "Request body must be application/json.",
+                status=415,
+                code="UNSUPPORTED_MEDIA_TYPE",
+            )
 
     def handle_api(self, method: str, path: str, query: dict[str, list[str]]) -> None:
         if method == "GET" and path == "/api/config":
@@ -1108,6 +1201,13 @@ class PortalHandler(BaseHTTPRequestHandler):
 
 def run() -> None:
     config = Config.from_env()
+    if not config.portal_token:
+        log_json(
+            {
+                "level": "warning",
+                "message": "PORTAL_TOKEN is not set; every /api/* request will return 503 until it is configured.",
+            }
+        )
     PortalHandler.app = App(config)
     PortalHandler.static_root = Path(__file__).parent / "static"
     server = ThreadingHTTPServer((config.bind_host, config.bind_port), PortalHandler)

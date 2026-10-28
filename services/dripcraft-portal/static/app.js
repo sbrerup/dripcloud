@@ -1,13 +1,25 @@
+const TOKEN_KEY = "dripcraftPortalToken";
+
+function readStoredToken() {
+  try {
+    return sessionStorage.getItem(TOKEN_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
 const state = {
   config: null,
   jars: null,
-  token: sessionStorage.getItem("dripcraftPortalToken") || "",
+  token: readStoredToken(),
 };
 
 const els = {
   authPanel: document.getElementById("authPanel"),
+  authMessage: document.getElementById("authMessage"),
   portalToken: document.getElementById("portalToken"),
   saveTokenButton: document.getElementById("saveTokenButton"),
+  lockButton: document.getElementById("lockButton"),
   refreshButton: document.getElementById("refreshButton"),
   syncButton: document.getElementById("syncButton"),
   createForm: document.getElementById("createForm"),
@@ -20,6 +32,23 @@ const els = {
   serverCount: document.getElementById("serverCount"),
   toast: document.getElementById("toast"),
 };
+
+function setToken(token) {
+  state.token = token;
+  try {
+    if (token) sessionStorage.setItem(TOKEN_KEY, token);
+    else sessionStorage.removeItem(TOKEN_KEY);
+  } catch {
+    // Storage can be unavailable; the token then only lives in memory.
+  }
+  els.lockButton.classList.toggle("hidden", !token);
+}
+
+function showAuth(message) {
+  els.authMessage.textContent = message;
+  els.authPanel.classList.remove("hidden");
+  els.portalToken.focus();
+}
 
 function headers() {
   const result = { "Content-Type": "application/json" };
@@ -37,6 +66,12 @@ async function api(path, options = {}) {
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
+    if (response.status === 401) {
+      showAuth(state.token ? "The portal token was rejected. Enter it again." : "Enter the portal token to continue.");
+      setToken("");
+    } else if (payload.error === "PORTAL_TOKEN_NOT_CONFIGURED") {
+      showAuth("The server has no PORTAL_TOKEN configured, so the API is disabled.");
+    }
     const message = payload.message || payload.error || `HTTP ${response.status}`;
     throw new Error(message);
   }
@@ -287,20 +322,36 @@ async function rowAction(event) {
   }
 }
 
-els.saveTokenButton.addEventListener("click", async () => {
-  state.token = els.portalToken.value;
-  sessionStorage.setItem("dripcraftPortalToken", state.token);
+function boot() {
+  return loadConfig()
+    .then(loadJars)
+    .then(refresh)
+    .catch((error) => showToast(error.message));
+}
+
+function unlock() {
+  const token = els.portalToken.value.trim();
+  els.portalToken.value = "";
+  if (!token) return;
+  setToken(token);
   els.authPanel.classList.add("hidden");
-  try {
-    await loadJars();
-    await refresh();
-  } catch (error) {
-    sessionStorage.removeItem("dripcraftPortalToken");
-    state.token = "";
-    els.authPanel.classList.remove("hidden");
-    showToast(error.message);
-  }
+  boot();
+}
+
+function lock() {
+  setToken("");
+  state.config = null;
+  state.jars = null;
+  els.serverRows.innerHTML = "";
+  els.serverCount.textContent = "0";
+  showAuth("Portal token cleared for this tab.");
+}
+
+els.saveTokenButton.addEventListener("click", unlock);
+els.portalToken.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") unlock();
 });
+els.lockButton.addEventListener("click", lock);
 
 els.refreshButton.addEventListener("click", () => refresh().catch((error) => showToast(error.message)));
 els.syncButton.addEventListener("click", () => syncExisting());
@@ -315,7 +366,5 @@ els.createForm.elements.hostname.addEventListener("input", (event) => {
   event.target.dataset.touched = "true";
 });
 
-loadConfig()
-  .then(loadJars)
-  .then(refresh)
-  .catch((error) => showToast(error.message));
+els.lockButton.classList.toggle("hidden", !state.token);
+boot();

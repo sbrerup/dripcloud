@@ -204,6 +204,10 @@ label span,
   margin-bottom: 16px;
 }
 
+.notice p {
+  margin: 6px 0 10px;
+}
+
 .status-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   margin-bottom: 16px;
