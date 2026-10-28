@@ -3,3 +3,4 @@ kind: Kustomization
 namespace: beamray-agent-services
 resources:
   - egress-policy.yaml
+  - ingress-policy.yaml

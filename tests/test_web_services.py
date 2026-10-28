@@ -73,6 +73,16 @@ class WebServicesTests(unittest.TestCase):
         self.assertTrue({"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10", "169.254.0.0/16"}.issubset(blocks[0]["except"]))
         dependencies = policies["firecrawl-api-dependencies-egress"]["spec"]
         self.assertEqual(dependencies["podSelector"]["matchLabels"]["app.kubernetes.io/name"], "firecrawl-api")
+        internal = policies["firecrawl-internal-ingress"]["spec"]
+        self.assertEqual(internal["policyTypes"], ["Ingress"])
+        self.assertEqual(
+            set(internal["podSelector"]["matchExpressions"][0]["values"]),
+            {"firecrawl-redis", "firecrawl-rabbitmq", "firecrawl-nuq-postgres", "firecrawl-playwright"},
+        )
+        self.assertEqual(
+            [peer["podSelector"]["matchLabels"] for rule in internal["ingress"] for peer in rule["from"]],
+            [{"app.kubernetes.io/name": "firecrawl-api"}],
+        )
 
 
 if __name__ == "__main__":

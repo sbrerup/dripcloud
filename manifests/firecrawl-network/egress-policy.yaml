@@ -1,5 +1,5 @@
-# IPv6 egress is denied entirely. No ingress restrictions are added.
-# These are egress-only policies; incoming API access is unchanged.
+# IPv6 egress is denied entirely. Incoming API access is unchanged; ingress to
+# the backing services is limited in ingress-policy.yaml.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

@@ -1,0 +1,19 @@
+# Firecrawl's backing services have no authentication of their own (Redis has
+# no password), so only firecrawl-api may reach them.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: firecrawl-internal-ingress
+  namespace: beamray-agent-services
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: [firecrawl-redis, firecrawl-rabbitmq, firecrawl-nuq-postgres, firecrawl-playwright]
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: firecrawl-api
