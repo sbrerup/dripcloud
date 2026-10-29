@@ -32,5 +32,5 @@ after the first build, as with the portal image, or the cluster cannot pull it.
 
 The relay image is upstream's and pinned by digest; Renovate updates it.
 
-Validate with `kubectl kustomize manifests/dripcraft-play` and
-`kubectl apply --dry-run=server -k manifests/dripcraft-play`.
+Validate with `kubectl apply --dry-run=server -k manifests/dripcraft-play` and
+`python -m unittest discover -s tests` from the repository root.
