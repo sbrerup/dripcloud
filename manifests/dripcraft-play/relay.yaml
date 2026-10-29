@@ -1,0 +1,120 @@
+# WebSocket-to-TCP relay for the browser client (github.com/zardoy/mwc-proxy).
+# The Crafty servers run in online mode, and unlike the relay built into the
+# client image this one handles Microsoft login. Login tokens stay in the
+# browser; the relay keeps no state.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dripcraft-relay
+  labels:
+    app.kubernetes.io/name: dripcraft-relay
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: dripcraft-relay
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: dripcraft-relay
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: relay
+          image: ghcr.io/zardoy/mwc-proxy:0.0.4@sha256:dca66cea432e10311fa64bedbc7a15471dd9facd58c44312356945ad1d1dff79
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PORT
+              value: "2344"
+            # Do not report this relay to the public list at signal.mcraft.fun.
+            - name: DISABLE_SIGNAL
+              value: "true"
+            - name: ALLOW_ORIGIN
+              value: https://dripcraft-play.turtle-vector.ts.net
+            - name: CONFIG_OVERRIDES_JSON
+              value: '{"metricsEndpoint":false,"debugUrlEndpoint":false}'
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          ports:
+            - name: http
+              containerPort: 2344
+          readinessProbe:
+            httpGet:
+              path: /api/vm/net/connect
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/vm/net/connect
+              port: http
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          volumeMounts:
+            - name: logs
+              mountPath: /usr/src/app/dist/logs
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: logs
+          emptyDir:
+            sizeLimit: 200Mi
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dripcraft-relay
+  labels:
+    app.kubernetes.io/name: dripcraft-relay
+spec:
+  selector:
+    app.kubernetes.io/name: dripcraft-relay
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dripcraft-relay
+  labels:
+    app.kubernetes.io/name: dripcraft-relay
+  annotations:
+    # Only the owner may reach it (see the tailnet policy).
+    tailscale.com/tags: tag:k8s-admin
+spec:
+  ingressClassName: tailscale
+  tls:
+    - hosts:
+        - dripcraft-relay
+  rules:
+    - host: dripcraft-relay
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: dripcraft-relay
+                port:
+                  number: 80

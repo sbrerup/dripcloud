@@ -46,6 +46,11 @@
       enabled: false,
     },
     {
+      description: 'The play image tag is the upstream commit pinned in its workflow (manifests/dripcraft-play/README.md)',
+      matchPackageNames: ['ghcr.io/sbrerup/dripcraft-play'],
+      enabled: false,
+    },
+    {
       description: 'Major updates wait for approval on the Dependency Dashboard',
       matchUpdateTypes: ['major'],
       dependencyDashboardApproval: true,

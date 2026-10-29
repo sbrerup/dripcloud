@@ -1,0 +1,110 @@
+# Browser Minecraft client (github.com/zardoy/minecraft-web-client). The image
+# tag is the upstream commit built by .github/workflows/dripcraft-play-image.yaml.
+# config.json is merged over the bundled config: it points the client at the
+# relay and lists the Crafty servers.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dripcraft-play
+  labels:
+    app.kubernetes.io/name: dripcraft-play
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: dripcraft-play
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: dripcraft-play
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: client
+          image: ghcr.io/sbrerup/dripcraft-play:f9ea1d105fb62d7353f7fd1bd50f68b17ef48964
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /config.json
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /config.json
+              port: http
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          volumeMounts:
+            - name: config
+              mountPath: /app/public
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: dripcraft-play-config
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dripcraft-play
+  labels:
+    app.kubernetes.io/name: dripcraft-play
+spec:
+  selector:
+    app.kubernetes.io/name: dripcraft-play
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dripcraft-play
+  labels:
+    app.kubernetes.io/name: dripcraft-play
+  annotations:
+    # Only the owner may reach it (see the tailnet policy).
+    tailscale.com/tags: tag:k8s-admin
+spec:
+  ingressClassName: tailscale
+  tls:
+    - hosts:
+        - dripcraft-play
+  rules:
+    - host: dripcraft-play
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: dripcraft-play
+                port:
+                  number: 80

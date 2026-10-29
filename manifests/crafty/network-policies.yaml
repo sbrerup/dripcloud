@@ -27,11 +27,18 @@ spec:
         - {protocol: TCP, port: 8100}
         - {protocol: TCP, port: 8123}
     # Secondary servers are exposed only through portal-created Tailscale
-    # LoadBalancers (EXPOSE_ALLOWED_PORTS in portal.yaml).
+    # LoadBalancers (EXPOSE_ALLOWED_PORTS in portal.yaml) and the browser
+    # client's relay (manifests/dripcraft-play).
     - from:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: tailscale
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: dripcraft-play
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: dripcraft-relay
       ports:
         - {protocol: TCP, port: 25566, endPort: 25665}
     - from:

@@ -1,0 +1,9 @@
+{
+  "defaultProxy": "https://dripcraft-relay.turtle-vector.ts.net",
+  "defaultProxies": ["https://dripcraft-relay.turtle-vector.ts.net"],
+  "promoteServers": [
+    {"ip": "minecraft-dripblokz.dripcraft.svc.cluster.local:25565", "name": "DripBlokz"},
+    {"ip": "minecraft-dripcraft-oneblock.dripcraft.svc.cluster.local:25565", "name": "DripCraft OneBlock"},
+    {"ip": "minecraft-hardcore.dripcraft.svc.cluster.local:25565", "name": "Hardcore"}
+  ]
+}

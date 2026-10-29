@@ -70,6 +70,10 @@ server plugin is installed and listening inside Crafty:
 - BlueMap 3D map: `https://dripcraft-map` -> Crafty port `8100`
 - Dynmap 2D/isometric map: `https://dripcraft-dynmap` -> Crafty port `8123`
 
+Browser gameplay runs at `https://dripcraft-play` through `apps/dripcraft-play.yaml`:
+the open-source Minecraft Web Client plus a relay with Microsoft login, in the
+`dripcraft-play` namespace. See [Dripcraft Play](manifests/dripcraft-play/README.md).
+
 Operational notes:
 
 - Keep the Crafty image pinned and take a data backup before bumping it.
