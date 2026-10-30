@@ -13,15 +13,19 @@ on:
       - .github/workflows/dripcraft-portal-image.yaml
   workflow_dispatch:
 
+# Pull requests and branch dispatches run code that anyone with write access can
+# change (the tests, the Dockerfile), so only the main-only publish job may write
+# packages, and no job leaves its token in .git/config.
 permissions:
   contents: read
-  packages: write
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
@@ -31,9 +35,26 @@ jobs:
         working-directory: services/dripcraft-portal
         run: python -m unittest discover -s tests
 
-      # Publish only from main; a dispatch on another branch just builds.
+      # On main the publish job builds the image instead.
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        if: github.ref != 'refs/heads/main'
+        with:
+          context: services/dripcraft-portal
+          push: false
+
+  publish:
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
       - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
-        if: github.ref == 'refs/heads/main'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -42,7 +63,7 @@ jobs:
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: services/dripcraft-portal
-          push: ${{ github.ref == 'refs/heads/main' }}
+          push: true
           tags: |
             ghcr.io/sbrerup/dripcraft-portal:latest
             ghcr.io/sbrerup/dripcraft-portal:${{ github.sha }}
