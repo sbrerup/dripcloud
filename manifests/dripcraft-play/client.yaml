@@ -28,7 +28,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: client
-          image: ghcr.io/sbrerup/dripcraft-play:f9ea1d105fb62d7353f7fd1bd50f68b17ef48964
+          image: ghcr.io/sbrerup/dripcraft-play:f9ea1d105fb62d7353f7fd1bd50f68b17ef48964@sha256:68bfeb05d8c9a8e340e3b9b375ac27668611f740849b651b72a76d123b7ab27a
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false

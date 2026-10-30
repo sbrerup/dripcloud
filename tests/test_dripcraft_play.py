@@ -35,7 +35,8 @@ class DripcraftPlayTests(unittest.TestCase):
     def test_client_image_is_the_built_commit(self):
         workflow = yaml.safe_load((ROOT / ".github" / "workflows" / "dripcraft-play-image.yaml").read_text())
         image = self.pod("dripcraft-play")["containers"][0]["image"]
-        self.assertEqual(image, f"ghcr.io/sbrerup/dripcraft-play:{workflow['env']['MWC_REF']}")
+        # Pinned by digest too: the workflow re-pushes this tag whenever it changes.
+        self.assertRegex(image, rf"^ghcr\.io/sbrerup/dripcraft-play:{workflow['env']['MWC_REF']}@sha256:[0-9a-f]{{64}}$")
 
     def test_client_uses_the_private_relay(self):
         configmap = next(obj for (kind, _), obj in self.objects.items() if kind == "ConfigMap")

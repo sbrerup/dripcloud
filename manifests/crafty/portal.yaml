@@ -83,7 +83,7 @@ spec:
       serviceAccountName: dripcraft-portal
       containers:
         - name: portal
-          image: ghcr.io/sbrerup/dripcraft-portal:def6c4ef4cb57388e73298a3b2a37df4182388e7
+          image: ghcr.io/sbrerup/dripcraft-portal:def6c4ef4cb57388e73298a3b2a37df4182388e7@sha256:6526ec4b92602a91580d6879a67ea6069f68c8ef2e899607cf9d3e2ba5b4cb3a
           imagePullPolicy: Always
           securityContext:
             runAsNonRoot: true
