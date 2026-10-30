@@ -31,8 +31,9 @@ jobs:
           ref: ${{ env.MWC_REF }}
           persist-credentials: false
 
+      # Publish only from main; a dispatch on another branch just builds.
       - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
-        if: github.event_name != 'pull_request'
+        if: github.ref == 'refs/heads/main'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -43,5 +44,5 @@ jobs:
           context: .
           build-args: |
             DOWNLOAD_SOUNDS=true
-          push: ${{ github.event_name != 'pull_request' }}
+          push: ${{ github.ref == 'refs/heads/main' }}
           tags: ghcr.io/sbrerup/dripcraft-play:${{ env.MWC_REF }}
