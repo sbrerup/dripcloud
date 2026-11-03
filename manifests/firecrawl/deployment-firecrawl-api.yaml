@@ -52,7 +52,7 @@ spec:
         envFrom:
         - configMapRef:
             name: firecrawl-config
-        image: ghcr.io/firecrawl/firecrawl@sha256:4546c7c3ff9636cda15cbd6fb9132e4b198f18c9076bf687a486c8b94845cd19
+        image: ghcr.io/firecrawl/firecrawl@sha256:a00a64a8117545821c69e163963f6639298608c83d6b0e2630e531c4d5c6c777
         imagePullPolicy: IfNotPresent
         livenessProbe:
           httpGet:
