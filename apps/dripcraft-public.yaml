@@ -5,7 +5,7 @@ metadata:
   namespace: argocd
   annotations:
     # Client-side diff flags the API server's volumeClaimTemplates defaults on
-    # the StatefulSet, as on the crafty app.
+    # the StatefulSet, leaving the app OutOfSync.
     argocd.argoproj.io/compare-options: ServerSideDiff=true
 spec:
   project: default

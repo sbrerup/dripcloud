@@ -1,11 +1,9 @@
 # Dripcraft Public
 
 `apps/dripcraft-public.yaml` runs an internet-facing Paper server for 4-10
-players, reached through a [playit.gg](https://playit.gg) tunnel. It is separate
-from Crafty on purpose: Crafty runs every server as the same user as its panel,
-so a public server there could read the panel's database and the other worlds.
-This server has its own namespace, memory limit and network policy, and does not
-appear in the Crafty panel.
+players, reached through a [playit.gg](https://playit.gg) tunnel. It has its own
+namespace, memory limit and network policy, because it takes connections from
+the internet on a node shared with everything else.
 
 The tunnel is outbound only: no router port forward, nothing exposed on the LAN
 or the tailnet, and players never see the home IP address.

@@ -35,22 +35,6 @@
       groupName: 'tailscale',
     },
     {
-      description: 'Crafty holds the Minecraft worlds: back up before bumping (README: DripCraft)',
-      matchPackageNames: ['arcadiatechnology/crafty-4'],
-      dependencyDashboardApproval: true,
-      prBodyNotes: ['Take a Crafty data backup before merging this.'],
-    },
-    {
-      description: 'The portal image tag is the commit SHA built by CI',
-      matchPackageNames: ['ghcr.io/sbrerup/dripcraft-portal'],
-      enabled: false,
-    },
-    {
-      description: 'The play image tag is the upstream commit pinned in its workflow (manifests/dripcraft-play/README.md)',
-      matchPackageNames: ['ghcr.io/sbrerup/dripcraft-play'],
-      enabled: false,
-    },
-    {
       description: 'Major updates wait for approval on the Dependency Dashboard',
       matchUpdateTypes: ['major'],
       dependencyDashboardApproval: true,

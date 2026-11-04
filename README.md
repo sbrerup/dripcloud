@@ -36,76 +36,9 @@ can do (`infrastructure/beamray-dev-guardrails.yaml` and
 
 ## DripCraft
 
-Minecraft is managed through Crafty Controller instead of declaring server
-plugins and generated configuration in GitOps.
-
-Argo CD owns:
-
-- the Crafty workload
-- the retained PVC
-- LAN load balancer services (game ports only)
-- the Tailscale Ingress for the Crafty panel
-- the Cilium load balancer IP pool
-- NetworkPolicies isolating Crafty from the LAN and the rest of the cluster
-
-Crafty owns:
-
-- Minecraft server creation
-- plugins, datapacks, and generated config
-- server console access
-- server file editing and uploads
-- Minecraft-level backup schedules
-
-The Crafty panel is exposed only on the tailnet at `https://crafty`. It is not
-on the LAN load balancer (`10.1.2.250`), which carries game and map ports only.
-
-The Dripcraft portal is exposed through Tailscale as `https://dripcraft`.
-It creates Crafty servers and matching Tailscale `LoadBalancer` Services in one
-operation. After creating a server, it redirects to Crafty for detailed server
-management.
-
-World map viewers are exposed through Tailscale when the matching Minecraft
-server plugin is installed and listening inside Crafty:
-
-- BlueMap 3D map: `https://dripcraft-map` -> Crafty port `8100`
-- Dynmap 2D/isometric map: `https://dripcraft-dynmap` -> Crafty port `8123`
-
-Browser gameplay runs at `https://dripcraft-play` through `apps/dripcraft-play.yaml`:
-the open-source Minecraft Web Client plus a relay with Microsoft login, in the
-`dripcraft-play` namespace. See [Dripcraft Play](manifests/dripcraft-play/README.md).
-
-The internet-facing server runs outside Crafty, through a playit.gg tunnel, via
-`apps/dripcraft-public.yaml`. See [Dripcraft Public](manifests/dripcraft-public/README.md).
-
-Operational notes:
-
-- Keep the Crafty image pinned and take a data backup before bumping it.
-- Create and delete Minecraft servers through the Dripcraft portal when you want
-  Tailscale networking to follow the server lifecycle automatically.
-- Servers created directly in Crafty can be pulled into Tailnet exposure with
-  the portal's `Sync` button.
-- Create the Skyblock server on port `25565`; add more Service ports if you
-  want Crafty-managed secondary servers reachable from the LAN.
-- Keep Minecraft's configured max heap below the pod memory limit. All servers
-  share the `18Gi` pod limit, and exceeding it kills Crafty and every server
-  together, so leave headroom for Crafty, plugins, and native memory.
-- BlueMap/Dynmap are map viewers, not full browser gameplay. Install and
-  configure the chosen plugin through Crafty for the server you want to view;
-  only one server can use each configured web-map port unless you add more
-  Service ports and Ingresses.
-- Crafty backups live on the same retained local PVC as the server data. For a
-  true forever server, also back up `/crafty/servers`, `/crafty/backups`, and
-  `/crafty/app/config` off the Kubernetes node.
-
-Portal setup:
-
-```powershell
-kubectl -n dripcraft create secret generic dripcraft-portal-crafty `
-  --from-literal=apiToken='CRAFTY_API_TOKEN'
-```
-
-If GHCR publishes the portal image as private, either make the package public or
-add an image pull secret for `ghcr.io/sbrerup/dripcraft-portal:latest`.
+`apps/dripcraft-public.yaml` runs the Minecraft server: a whitelisted Paper
+server in its own `dripcraft-public` namespace, reached through a playit.gg
+tunnel. See [Dripcraft Public](manifests/dripcraft-public/README.md).
 
 ## Talos
 
@@ -132,6 +65,6 @@ Argo CD, so changes to it are applied by hand rather than synced from `main`.
   `apt update && apt full-upgrade` on labmox and reboot if a new kernel came in.
 - **Cluster:** Renovate (`renovate.json5`) opens weekly PRs for container images,
   Helm charts and GitHub Actions. Nothing auto-merges, because Argo CD deploys
-  `main` as soon as it changes. Major updates and Crafty bumps wait for approval
+  `main` as soon as it changes. Major updates wait for approval
   on the Dependency Dashboard issue.
 - **Talos and Kubernetes:** upgraded by hand with `talosctl`.
