@@ -104,6 +104,23 @@ kubectl -n dripcraft create secret generic dripcraft-portal-crafty `
 If GHCR publishes the portal image as private, either make the package public or
 add an image pull secret for `ghcr.io/sbrerup/dripcraft-portal:latest`.
 
+## Talos
+
+The cluster runs on [Talos Linux](https://www.talos.dev/), an immutable,
+API-managed Linux distribution built for Kubernetes. Nodes have no SSH or shell;
+they are configured through machine config and `talosctl`. This layer sits below
+Argo CD, so changes to it are applied by hand rather than synced from `main`.
+
+- `clusters/labmox/terraform` creates the node VMs on Proxmox from template VM
+  `8000`.
+- `clusters/labmox/talos/boostrap.sh` generates the machine config and secrets,
+  applies the patches, bootstraps etcd, and fetches the kubeconfig. Generated
+  files are ignored by Git.
+- `clusters/labmox/talos/patches` allows workloads on the control plane and
+  turns off the default CNI and kube-proxy, because Cilium (`values.yaml`)
+  replaces both. It also defines `local-volume`, mounted at
+  `/var/mnt/local-volume`, which backs the local-path provisioner.
+
 ## Updates
 
 - **Proxmox host:** Debian security updates install automatically every day
