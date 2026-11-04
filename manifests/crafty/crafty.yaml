@@ -128,9 +128,12 @@ spec:
               containerPort: 19132
               protocol: UDP
           resources:
+            # Requests cover normal use (peak 5.2Gi with all servers up); the
+            # limit leaves room for every server's heap. Higher requests left
+            # the shared node nothing to schedule anything else with.
             requests:
-              cpu: "3"
-              memory: 18Gi
+              cpu: "1"
+              memory: 8Gi
             limits:
               memory: 18Gi
           startupProbe:

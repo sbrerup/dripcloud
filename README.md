@@ -74,6 +74,9 @@ Browser gameplay runs at `https://dripcraft-play` through `apps/dripcraft-play.y
 the open-source Minecraft Web Client plus a relay with Microsoft login, in the
 `dripcraft-play` namespace. See [Dripcraft Play](manifests/dripcraft-play/README.md).
 
+The internet-facing server runs outside Crafty, through a playit.gg tunnel, via
+`apps/dripcraft-public.yaml`. See [Dripcraft Public](manifests/dripcraft-public/README.md).
+
 Operational notes:
 
 - Keep the Crafty image pinned and take a data backup before bumping it.
@@ -83,9 +86,9 @@ Operational notes:
   the portal's `Sync` button.
 - Create the Skyblock server on port `25565`; add more Service ports if you
   want Crafty-managed secondary servers reachable from the LAN.
-- Keep Minecraft's configured max heap below the pod memory limit. With the
-  current `11Gi` pod limit, leave headroom for Crafty, plugins, and native
-  memory instead of assigning the whole pod limit to the Java heap.
+- Keep Minecraft's configured max heap below the pod memory limit. All servers
+  share the `18Gi` pod limit, and exceeding it kills Crafty and every server
+  together, so leave headroom for Crafty, plugins, and native memory.
 - BlueMap/Dynmap are map viewers, not full browser gameplay. Install and
   configure the chosen plugin through Crafty for the server you want to view;
   only one server can use each configured web-map port unless you add more
