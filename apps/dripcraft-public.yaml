@@ -10,9 +10,9 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/sbrerup/dripcloud.git
+    repoURL: https://github.com/sbrerup/dripcraft.git
     targetRevision: HEAD
-    path: manifests/dripcraft-public
+    path: manifests
   destination:
     server: https://kubernetes.default.svc
     namespace: dripcraft-public
