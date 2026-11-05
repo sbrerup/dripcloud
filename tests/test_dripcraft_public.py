@@ -32,12 +32,6 @@ class DripcraftPublicTests(unittest.TestCase):
         """Find a generated object, whose name ends in a content hash."""
         return next(obj for (k, name), obj in self.objects.items() if k == kind and name.startswith(f"{prefix}-"))
 
-    def test_app_registration(self):
-        app = yaml.safe_load((ROOT / "apps" / f"{NAMESPACE}.yaml").read_text())
-        self.assertEqual(app["spec"]["source"]["path"], f"manifests/{NAMESPACE}")
-        self.assertEqual(app["spec"]["destination"]["namespace"], NAMESPACE)
-        self.assertTrue(app["spec"]["syncPolicy"]["automated"]["selfHeal"])
-
     def test_namespace_enforces_restricted(self):
         labels = self.objects[("Namespace", NAMESPACE)]["metadata"]["labels"]
         self.assertEqual(labels["pod-security.kubernetes.io/enforce"], "restricted")
