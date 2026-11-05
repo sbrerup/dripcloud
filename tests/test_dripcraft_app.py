@@ -15,6 +15,13 @@ class DripcraftAppTests(unittest.TestCase):
         self.assertEqual(app["spec"]["destination"]["namespace"], "dripcraft-public")
         self.assertTrue(app["spec"]["syncPolicy"]["automated"]["selfHeal"])
 
+    def test_admin_panel_is_deployed_from_its_own_repository(self):
+        app = yaml.safe_load((ROOT / "apps" / "dripcraft-admin.yaml").read_text())
+        self.assertEqual(app["spec"]["source"]["repoURL"], "https://github.com/sbrerup/mc-server-ui.git")
+        self.assertEqual(app["spec"]["source"]["path"], "manifests")
+        self.assertEqual(app["spec"]["destination"]["namespace"], "dripcraft-admin")
+        self.assertTrue(app["spec"]["syncPolicy"]["automated"]["selfHeal"])
+
 
 if __name__ == "__main__":
     unittest.main()
