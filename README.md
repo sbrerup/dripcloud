@@ -40,6 +40,12 @@ can do (`infrastructure/beamray-dev-guardrails.yaml` and
 server in its own `dripcraft-public` namespace, reached through a playit.gg
 tunnel. Its manifests live in [sbrerup/dripcraft](https://github.com/sbrerup/dripcraft).
 
+`apps/dripcraft-admin.yaml` runs its admin panel, reachable only on the tailnet, in
+its own `dripcraft-admin` namespace. The panel changes settings by committing to
+sbrerup/dripcraft. Its code and manifests live in
+[sbrerup/mc-server-ui](https://github.com/sbrerup/mc-server-ui), whose README covers
+the Secret that has to be created by hand.
+
 ## Talos
 
 The cluster runs on [Talos Linux](https://www.talos.dev/), an immutable,
