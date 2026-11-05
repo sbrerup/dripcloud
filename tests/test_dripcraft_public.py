@@ -87,7 +87,7 @@ class DripcraftPublicTests(unittest.TestCase):
         self.assertEqual(mounts[path]["subPath"], pathlib.PurePosixPath(path).name)
         self.assertIn(mounts[path]["subPath"], self.objects_with_prefix("ConfigMap", "paper-config")["data"])
 
-    def test_mobs_spawn_inside_the_simulated_area(self):
+    def test_spawn_range_matches_simulation_distance(self):
         patches = json.loads((ROOT / "manifests" / NAMESPACE / "tuning-patches.json").read_text())["patches"]
         spawn_range = next(
             op["$set"]["value"]
@@ -95,7 +95,7 @@ class DripcraftPublicTests(unittest.TestCase):
             for op in patch["ops"]
             if "mob-spawn-range" in op["$set"]["path"]
         )
-        self.assertLess(spawn_range, int(self.env()["SIMULATION_DISTANCE"]["value"]))
+        self.assertEqual(spawn_range, int(self.env()["SIMULATION_DISTANCE"]["value"]))
 
     def test_proxy_protocol_is_on_for_both_paper_and_health_checks(self):
         paper = yaml.safe_load((ROOT / "manifests" / NAMESPACE / "paper-global.yml").read_text())

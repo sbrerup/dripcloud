@@ -121,6 +121,7 @@ spec:
             # simulated close to players, and let ZFS handle write ordering.
             - name: VIEW_DISTANCE
               value: "10"
+            # Keep mob-spawn-range in tuning-patches.json equal to this.
             - name: SIMULATION_DISTANCE
               value: "6"
             - name: SYNC_CHUNK_WRITES
