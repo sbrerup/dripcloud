@@ -38,7 +38,7 @@ can do (`infrastructure/beamray-dev-guardrails.yaml` and
 
 `apps/dripcraft-public.yaml` runs the Minecraft server: a whitelisted Paper
 server in its own `dripcraft-public` namespace, reached through a playit.gg
-tunnel. See [Dripcraft Public](manifests/dripcraft-public/README.md).
+tunnel. Its manifests live in [sbrerup/dripcraft](https://github.com/sbrerup/dripcraft).
 
 ## Talos
 
