@@ -71,11 +71,19 @@ spec:
               value: "26.3"
             - name: PAPER_BUILD
               value: "241"
-            # 4-10 players. Keep the pod limit about 2Gi above the heap.
+            # 4-10 players. Keep the pod limit about 4Gi above the heap: Java
+            # needs about 1Gi on top of it, and the rest is file cache, which
+            # counts against the limit and speeds up chunk loading.
             - name: MEMORY
               value: 6G
             - name: USE_AIKAR_FLAGS
               value: "TRUE"
+            # Added to Aikar's flags, not a replacement for them.
+            - name: JVM_XX_OPTS
+              value: -XX:+UseTransparentHugePages -XX:+UseCompactObjectHeaders
+            # Settings with no environment variable, applied on every start.
+            - name: PATCH_DEFINITIONS
+              value: /patches/tuning-patches.json
             # Access: online accounts on the whitelist only. Names are managed
             # with rcon-cli (see README) because this repository is public.
             - name: ONLINE_MODE
@@ -154,15 +162,19 @@ spec:
             # No CPU limit: throttling the JVM causes tick stalls.
             requests:
               cpu: "2"
-              memory: 8Gi
+              memory: 10Gi
             limits:
-              memory: 8Gi
+              memory: 10Gi
           volumeMounts:
             - name: data
               mountPath: /data
             - name: paper-config
               mountPath: /config/paper-global.yml
               subPath: paper-global.yml
+              readOnly: true
+            - name: paper-config
+              mountPath: /patches/tuning-patches.json
+              subPath: tuning-patches.json
               readOnly: true
             - name: tmp
               mountPath: /tmp

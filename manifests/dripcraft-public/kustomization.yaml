@@ -10,3 +10,4 @@ configMapGenerator:
 - name: paper-config
   files:
   - paper-global.yml
+  - tuning-patches.json
