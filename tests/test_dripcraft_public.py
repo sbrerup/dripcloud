@@ -1,4 +1,5 @@
 """Run: python -m unittest discover -s tests (requires PyYAML and kubectl)."""
+import json
 import pathlib
 import subprocess
 import unittest
@@ -26,6 +27,10 @@ class DripcraftPublicTests(unittest.TestCase):
 
     def egress(self, policy):
         return self.objects[("NetworkPolicy", policy)]["spec"]["egress"]
+
+    def objects_with_prefix(self, kind, prefix):
+        """Find a generated object, whose name ends in a content hash."""
+        return next(obj for (k, name), obj in self.objects.items() if k == kind and name.startswith(f"{prefix}-"))
 
     def test_app_registration(self):
         app = yaml.safe_load((ROOT / "apps" / f"{NAMESPACE}.yaml").read_text())
@@ -71,8 +76,26 @@ class DripcraftPublicTests(unittest.TestCase):
         server = next(c for c in self.server["containers"] if c["name"] == "minecraft")
         heap = int(self.env()["MEMORY"]["value"].rstrip("G"))
         limit = int(server["resources"]["limits"]["memory"].rstrip("Gi"))
-        self.assertGreaterEqual(limit - heap, 2)
+        self.assertGreaterEqual(limit - heap, 4)
+        self.assertEqual(server["resources"]["requests"]["memory"], server["resources"]["limits"]["memory"])
         self.assertNotIn("cpu", server["resources"]["limits"])
+
+    def test_tuning_patches_are_mounted_where_the_image_reads_them(self):
+        server = next(c for c in self.server["containers"] if c["name"] == "minecraft")
+        mounts = {m["mountPath"]: m for m in server["volumeMounts"]}
+        path = self.env()["PATCH_DEFINITIONS"]["value"]
+        self.assertEqual(mounts[path]["subPath"], pathlib.PurePosixPath(path).name)
+        self.assertIn(mounts[path]["subPath"], self.objects_with_prefix("ConfigMap", "paper-config")["data"])
+
+    def test_mobs_spawn_inside_the_simulated_area(self):
+        patches = json.loads((ROOT / "manifests" / NAMESPACE / "tuning-patches.json").read_text())["patches"]
+        spawn_range = next(
+            op["$set"]["value"]
+            for patch in patches
+            for op in patch["ops"]
+            if "mob-spawn-range" in op["$set"]["path"]
+        )
+        self.assertLess(spawn_range, int(self.env()["SIMULATION_DISTANCE"]["value"]))
 
     def test_proxy_protocol_is_on_for_both_paper_and_health_checks(self):
         paper = yaml.safe_load((ROOT / "manifests" / NAMESPACE / "paper-global.yml").read_text())

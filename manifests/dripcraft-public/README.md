@@ -65,6 +65,17 @@ Profile with Paper's bundled spark before changing settings:
 kubectl -n dripcraft-public exec minecraft-0 -c minecraft -- rcon-cli spark tps
 ```
 
+## Tuning
+
+`tuning-patches.json` sets the Paper and Spigot options that have no environment
+variable. The image applies it on every start, so a hand edit to one of those
+options in the volume is overwritten. On a brand new volume the files do not
+exist yet, so the patch is skipped with a warning and takes effect from the
+second start.
+
+Keep `mob-spawn-range` below `SIMULATION_DISTANCE`, because mobs that spawn
+outside the simulated area just sit idle.
+
 ## Backups
 
 The `backup` sidecar writes `/backups/world-*.tar.gz` every 6 hours and keeps 7
