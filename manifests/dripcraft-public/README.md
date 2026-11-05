@@ -59,10 +59,11 @@ kubectl -n dripcraft-public exec minecraft-0 -c minecraft -- rcon-cli chunky rad
 kubectl -n dripcraft-public exec minecraft-0 -c minecraft -- rcon-cli chunky start
 ```
 
-Profile with Paper's bundled spark before changing settings:
+Check tick times before changing settings. Under 50 ms keeps the server at full
+speed. Spark's replies do not come back through `rcon-cli`, so use `mspt`:
 
 ```bash
-kubectl -n dripcraft-public exec minecraft-0 -c minecraft -- rcon-cli spark tps
+kubectl -n dripcraft-public exec minecraft-0 -c minecraft -- rcon-cli mspt
 ```
 
 ## Tuning
@@ -73,14 +74,15 @@ options in the volume is overwritten. On a brand new volume the files do not
 exist yet, so the patch is skipped with a warning and takes effect from the
 second start.
 
-Keep `mob-spawn-range` below `SIMULATION_DISTANCE`, because mobs that spawn
-outside the simulated area just sit idle.
+Keep `mob-spawn-range` equal to `SIMULATION_DISTANCE`. Both limits apply, so the
+smaller one wins: mobs cannot spawn where the world is not running.
 
 ## Backups
 
 The `backup` sidecar writes `/backups/world-*.tar.gz` every 6 hours and keeps 7
 days. Plugin and server jars are left out, because the image downloads them
-again on start. The nightly labmox VM backup copies the volume off-site.
+again on start. These archives are on the same disk as the world, and whether the
+nightly labmox VM backup covers this volume has not been checked.
 
 To restore, scale the StatefulSet to 0, unpack an archive over the `data` volume
 from a temporary pod, and scale back up.
