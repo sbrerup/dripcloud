@@ -46,6 +46,15 @@ sbrerup/dripcraft. Its code and manifests live in
 [sbrerup/mc-server-ui](https://github.com/sbrerup/mc-server-ui), whose README covers
 the Secret that has to be created by hand.
 
+`apps/dripcraft-ledger.yaml` runs the ledger, which keeps a lasting record of what
+members do on the server. It reads the archive in `dripcraft-public` through its feed
+and runs in its own `dripcraft-ledger` namespace, with a PostgreSQL of its own made by
+the CloudNativePG operator. Its code and manifests live in the private repository
+`sbrerup/dripcraft-ledger`. Because that repository and its image are private, Argo CD
+needs read access to the repository and the cluster needs a pull Secret for the image.
+Both are made by hand and live only in the cluster, and that repository's README covers
+them.
+
 ## Talos
 
 The cluster runs on [Talos Linux](https://www.talos.dev/), an immutable,
