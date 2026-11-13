@@ -1,0 +1,23 @@
+# The repository is private. Argo CD reads it with a credential that lives only
+# in the cluster, and the cluster pulls its image with a Secret made by hand.
+# The repository's README covers both.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dripcraft-ledger
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/sbrerup/dripcraft-ledger.git
+    targetRevision: HEAD
+    path: manifests
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dripcraft-ledger
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
