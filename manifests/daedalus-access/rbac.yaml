@@ -1,0 +1,63 @@
+# daedalus may look at the cluster and change nothing.
+#
+# "view" is the read-only role built into Kubernetes: workloads, their logs,
+# config maps, events and the like, in every namespace. It leaves out Secrets,
+# and it cannot run a command in a pod, forward a port or change anything.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: daedalus-view
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+  - kind: ServiceAccount
+    name: daedalus
+    namespace: daedalus-access
+---
+# What "view" leaves out and reading the state of this cluster needs: the node
+# and its storage, what Argo CD has deployed, the databases and the network rules.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: daedalus-read-extra
+rules:
+  - apiGroups: [""]
+    resources: [nodes, persistentvolumes]
+    verbs: [get, list, watch]
+  - apiGroups: [storage.k8s.io]
+    resources: [storageclasses]
+    verbs: [get, list, watch]
+  - apiGroups: [apiextensions.k8s.io]
+    resources: [customresourcedefinitions]
+    verbs: [get, list, watch]
+  - apiGroups: [argoproj.io]
+    resources: [applications, applicationsets, appprojects]
+    verbs: [get, list, watch]
+  - apiGroups: [postgresql.cnpg.io]
+    resources: [clusters, backups, scheduledbackups, poolers]
+    verbs: [get, list, watch]
+  - apiGroups: [cilium.io]
+    resources:
+      - ciliumnetworkpolicies
+      - ciliumclusterwidenetworkpolicies
+      - ciliumloadbalancerippools
+      - ciliuml2announcementpolicies
+    verbs: [get, list, watch]
+  - apiGroups: [gateway.networking.k8s.io]
+    resources: [gatewayclasses, gateways, httproutes, grpcroutes, referencegrants]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: daedalus-read-extra
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: daedalus-read-extra
+subjects:
+  - kind: ServiceAccount
+    name: daedalus
+    namespace: daedalus-access

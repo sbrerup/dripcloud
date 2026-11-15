@@ -1,0 +1,10 @@
+# The token in the kubeconfig on daedalus. The cluster fills it in; it does not expire.
+# Deleting this Secret revokes the token, and Argo CD then has a new one made.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: daedalus-token
+  annotations:
+    kubernetes.io/service-account.name: daedalus
+    argocd.argoproj.io/sync-wave: "-4"
+type: kubernetes.io/service-account-token

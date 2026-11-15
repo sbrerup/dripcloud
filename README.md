@@ -72,6 +72,26 @@ Argo CD, so changes to it are applied by hand rather than synced from `main`.
   replaces both. It also defines `local-volume`, mounted at
   `/var/mnt/local-volume`, which backs the local-path provisioner.
 
+## Read-only access for daedalus
+
+`apps/daedalus-access.yaml` gives daedalus, the VM that Claude Code sessions run on,
+an account that can look at the cluster and change nothing. The ServiceAccount
+`daedalus` in the `daedalus-access` namespace is bound to two roles:
+
+- `view`, the read-only role built into Kubernetes, in every namespace: workloads, their
+  logs, config maps, events. It leaves out Secrets, and it cannot run a command in a pod,
+  forward a port or change anything.
+- `daedalus-read-extra`, for what `view` leaves out: the node and its storage, the Argo CD
+  applications, the CloudNativePG databases and the network rules.
+
+So daedalus can see whether something has rolled out and why it fails, and the things
+that change the cluster (a restart, a command in a pod, a sync) stay with a person.
+`tests/test_daedalus_access.py` holds the account to reading.
+
+The Secret `daedalus-token` holds the token of the account, which the cluster fills in. It
+is copied into the kubeconfig on daedalus by hand and is in no repository. To revoke it,
+delete the Secret: Argo CD has a new one made, and the old token stops working.
+
 ## Updates
 
 - **Proxmox host:** Debian security updates install automatically every day
