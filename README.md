@@ -92,6 +92,24 @@ The Secret `daedalus-token` holds the token of the account, which the cluster fi
 is copied into the kubeconfig on daedalus by hand and is in no repository. To revoke it,
 delete the Secret: Argo CD has a new one made, and the old token stops working.
 
+## Commands a person approves (cerberus)
+
+`apps/cerberus.yaml` runs cerberus, the page where the owner approves single `kubectl`
+commands that daedalus asks for. When something has to change, daedalus files a request
+with the exact command and the reason. The owner reads it on the page, which only his
+own devices can reach on the tailnet, and approves or denies. cerberus runs an approved
+command once, as cluster admin, and records who approved it and how it ended on the
+request itself (`kubectl -n cerberus get cmdreq`).
+
+Filing and reading those requests is the one thing the daedalus account may do beyond
+reading, and that permission lives with cerberus, not here. The code, the manifests and
+the reasoning behind each safeguard are in
+[sbrerup/cerberus](https://github.com/sbrerup/cerberus).
+
+cerberus is the one workload in this cluster with cluster-admin rights that takes
+requests from a machine. Read that repository's README before changing its roles, the
+tag on its ingress or its network policies.
+
 ## Updates
 
 - **Proxmox host:** Debian security updates install automatically every day
