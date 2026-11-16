@@ -29,7 +29,7 @@ spec:
           value: 'true'
         - name: ALLOW_LOCAL_WEBHOOKS
           value: 'false'
-        image: ghcr.io/firecrawl/playwright-service@sha256:468009bae00911d40d7120d58489a1d529362c22c45585cb9076094fe61b0025
+        image: ghcr.io/firecrawl/playwright-service@sha256:227ce3d8059173925a5a0697c63a1e947662cca934a609151651f578774edd5d
         imagePullPolicy: IfNotPresent
         name: playwright
         ports:
