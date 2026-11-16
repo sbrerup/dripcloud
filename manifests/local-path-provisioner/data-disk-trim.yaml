@@ -1,0 +1,74 @@
+# Deleting a file frees its space on the node only. The node's disk on the Proxmox
+# host keeps those blocks, and the nightly backup of the VM copies them, until the
+# filesystem reports them as free. That is a trim, and nothing on the node does one
+# by itself.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: data-disk-trim
+  namespace: local-path-storage
+spec:
+  # Monday night, before the nightly backup of the VM starts at 03:30.
+  schedule: "45 2 * * 1"
+  timeZone: Europe/Copenhagen
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 900
+      template:
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          enableServiceLinks: false
+          containers:
+            - name: trim
+              image: busybox:1.37.0@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec
+              imagePullPolicy: IfNotPresent
+              command:
+                - sh
+                - -c
+                # 32 GiB at a time with a pause between, so the host is not asked to
+                # free everything at once while the servers run.
+                - |
+                  set -eu
+                  set -- $(df -kP /volume | tail -1)
+                  size=$(( $2 * 1024 ))
+                  step=$(( 32 * 1024 * 1024 * 1024 ))
+                  offset=0
+                  while [ "$offset" -lt "$size" ]; do
+                    fstrim -o "$offset" -l "$step" /volume
+                    offset=$(( offset + step ))
+                    sleep 4
+                  done
+                  echo "trimmed $1, which has $(( $3 / 1048576 )) GiB in use"
+              # A trim needs root and this one capability. The volume is mounted
+              # read-only, so the job cannot change a file on it.
+              securityContext:
+                runAsUser: 0
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+                  add:
+                    - SYS_ADMIN
+                seccompProfile:
+                  type: RuntimeDefault
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 16Mi
+                limits:
+                  memory: 64Mi
+              volumeMounts:
+                - name: volume
+                  mountPath: /volume
+                  readOnly: true
+          volumes:
+            - name: volume
+              hostPath:
+                path: /var/mnt/local-volume
+                type: Directory

@@ -72,6 +72,24 @@ Argo CD, so changes to it are applied by hand rather than synced from `main`.
   replaces both. It also defines `local-volume`, mounted at
   `/var/mnt/local-volume`, which backs the local-path provisioner.
 
+## Storage
+
+The local-path provisioner (`manifests/local-path-provisioner`) makes every volume a
+folder under `/var/mnt/local-volume` on the node. `local-path-retain` is the default
+class and keeps the folder when its claim is deleted; `local-path` deletes it.
+
+Deleting files in a volume frees space on the node, but not on the Proxmox host: the
+node's disk there keeps those blocks, and the nightly backup of the VM copies them,
+until the filesystem reports them as free. The `data-disk-trim` CronJob does that every
+Monday at 02:45, before the backup starts at 03:30. To run it at another time:
+
+```bash
+kubectl -n local-path-storage create job --from=cronjob/data-disk-trim trim-now
+```
+
+The job cannot say how much it freed, because the node's filesystem does not report it.
+On labmox, `zfs list rpool/data/vm-1000-disk-1` shows what the disk takes on the host.
+
 ## Read-only access for daedalus
 
 `apps/daedalus-access.yaml` gives daedalus, the VM that Claude Code sessions run on,
