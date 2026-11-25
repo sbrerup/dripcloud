@@ -22,7 +22,7 @@ spec:
     spec:
       automountServiceAccountToken: false
       containers:
-      - image: rabbitmq@sha256:e582c0bc7766f3342496d8485efb5a1df782b5ce3886ad017e2eaae442311f69
+      - image: rabbitmq@sha256:aa82e78ca0dfa59f4eeb9e8086ac7b5c8e0b31a7bb978d948c6d32756802fb27
         imagePullPolicy: IfNotPresent
         livenessProbe:
           failureThreshold: 3
