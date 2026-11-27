@@ -28,7 +28,7 @@ spec:
         - 0.0.0.0
         - --appendonly
         - 'yes'
-        image: redis@sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2
+        image: redis@sha256:56a1737794e36c3ebe8a4544a8ab421af3ab1a6488fb2238aec228c404933fed
         imagePullPolicy: IfNotPresent
         livenessProbe:
           exec:
